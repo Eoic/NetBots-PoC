@@ -20,44 +20,83 @@
     </header>
 
     <div class="main">
-        <!-- Editor Panel -->
-        <div class="panel editor-panel">
-            <div class="panel-header">Robot Code (AssemblyScript)</div>
-            <textarea id="code-editor" spellcheck="false"></textarea>
-        </div>
-
-        <!-- Arena Panel -->
-        <div class="panel arena-panel">
-            <div class="panel-header">Arena</div>
-            <div id="arena"></div>
-        </div>
-
-        <!-- Controls Panel -->
-        <div class="panel controls-panel">
-            <div class="panel-header">Controls</div>
-            <div class="controls">
-                <button id="btn-create" class="primary">Create Match</button>
-
-                <div class="field">
-                    <label>Match ID</label>
-                    <input type="text" id="match-id-input" placeholder="Paste match ID to join">
-                </div>
-                <button id="btn-join">Join Match</button>
-
-                <div class="field">
-                    <label>Current Match</label>
-                    <span id="match-id-display" style="font-size: 11px; color: #00ff88; word-break: break-all;">None</span>
-                </div>
-
-                <hr style="border-color: #333;">
-
-                <button id="btn-submit" disabled>Submit Code</button>
-                <button id="btn-watch" disabled>Watch Replay</button>
+        <!-- Top area: Arena + Controls side by side -->
+        <div class="top-area">
+            <!-- Arena Panel -->
+            <div class="panel arena-panel">
+                <div class="panel-header">Arena</div>
+                <div id="arena"></div>
             </div>
-            <div id="log"></div>
+
+            <!-- Controls Panel -->
+            <div class="panel controls-panel">
+                <div class="panel-header">Controls</div>
+                <div class="controls">
+                    <button id="btn-create" class="primary">Create Match</button>
+
+                    <div class="field">
+                        <label>Match ID</label>
+                        <input type="text" id="match-id-input" placeholder="Paste match ID to join">
+                    </div>
+                    <button id="btn-join">Join Match</button>
+
+                    <div class="field">
+                        <label>Current Match</label>
+                        <span id="match-id-display" style="font-size: 11px; color: #00ff88; word-break: break-all;">None</span>
+                    </div>
+
+                    <hr style="border-color: #333;">
+
+                    <button id="btn-submit" disabled>Submit Code</button>
+                    <button id="btn-watch" disabled>Watch Replay</button>
+                </div>
+                <div id="log"></div>
+            </div>
+        </div>
+
+        <!-- Resize handle -->
+        <div class="resize-handle" id="resize-handle"></div>
+
+        <!-- Bottom area: Code editor -->
+        <div class="bottom-area" id="bottom-area">
+            <div class="panel editor-panel">
+                <div class="panel-header">Robot Code (AssemblyScript)</div>
+                <textarea id="code-editor" spellcheck="false"></textarea>
+            </div>
         </div>
     </div>
 
     <script type="module" src="js/main.js"></script>
+    <script>
+        // Vertical resize handle logic
+        const handle = document.getElementById('resize-handle');
+        const bottomArea = document.getElementById('bottom-area');
+        let isResizing = false;
+
+        handle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'row-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const mainEl = document.querySelector('.main');
+            const mainRect = mainEl.getBoundingClientRect();
+            const newBottomHeight = mainRect.bottom - e.clientY;
+            const clamped = Math.max(100, Math.min(newBottomHeight, mainRect.height - 200));
+            bottomArea.style.flex = 'none';
+            bottomArea.style.height = clamped + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        });
+    </script>
 </body>
 </html>

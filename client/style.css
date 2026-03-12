@@ -11,6 +11,7 @@ body {
     height: 100vh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 header {
@@ -29,14 +30,22 @@ header h1 {
 
 .main {
     display: flex;
+    flex-direction: column;
     flex: 1;
+    overflow: hidden;
+}
+
+/* Top area: arena + controls side by side */
+.top-area {
+    display: flex;
+    flex: 1;
+    min-height: 200px;
     overflow: hidden;
 }
 
 .panel {
     display: flex;
     flex-direction: column;
-    border-right: 1px solid #333;
 }
 
 .panel-header {
@@ -47,12 +56,63 @@ header h1 {
     color: #888;
     text-transform: uppercase;
     letter-spacing: 1px;
+    flex-shrink: 0;
 }
 
-/* Editor panel */
+/* Arena panel — takes up most of the top area */
+.arena-panel {
+    flex: 1;
+    border-right: 1px solid #333;
+    overflow: hidden;
+}
+
+#arena {
+    flex: 1;
+    background: #1a1a2e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Controls panel — fixed width on the right */
+.controls-panel {
+    flex: 0 0 250px;
+    overflow: hidden;
+}
+
+.controls {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Resize handle */
+.resize-handle {
+    flex-shrink: 0;
+    height: 5px;
+    background: #1e1e3e;
+    cursor: row-resize;
+    border-top: 1px solid #333;
+    border-bottom: 1px solid #333;
+    transition: background 0.15s;
+}
+
+.resize-handle:hover {
+    background: #00aa55;
+}
+
+/* Bottom area: code editor */
+.bottom-area {
+    flex: 0 0 250px;
+    display: flex;
+    overflow: hidden;
+}
+
 .editor-panel {
     flex: 1;
-    min-width: 350px;
+    overflow: hidden;
 }
 
 #code-editor {
@@ -67,28 +127,6 @@ header h1 {
     resize: none;
     outline: none;
     tab-size: 2;
-}
-
-/* Arena panel */
-.arena-panel {
-    flex: 0 0 auto;
-}
-
-#arena {
-    background: #1a1a2e;
-}
-
-/* Controls panel */
-.controls-panel {
-    flex: 0 0 250px;
-    border-right: none;
-}
-
-.controls {
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
 }
 
 button {
