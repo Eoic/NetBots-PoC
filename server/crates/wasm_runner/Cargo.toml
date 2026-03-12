@@ -1,0 +1,13 @@
+[package]
+name = "wasm_runner"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasmtime = "29"
+engine = { path = "../engine" }
+anyhow = "1"
+wat = "1"
+
+[dev-dependencies]
+wasmtime = "29"
