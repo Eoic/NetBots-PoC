@@ -47,11 +47,15 @@ export async function initArena(container, width, height) {
 }
 
 function drawRobot(g, color) {
-    g.poly([-ROBOT_SIZE, -ROBOT_SIZE * 0.6, ROBOT_SIZE, 0, -ROBOT_SIZE, ROBOT_SIZE * 0.6]);
-    g.fill(color);
-    // Gun barrel
-    g.rect(0, -2, ROBOT_SIZE, 4);
-    g.fill(color);
+    // Body circle
+    g.circle(0, 0, ROBOT_SIZE);
+    g.fill({ color, alpha: 0.3 });
+    g.circle(0, 0, ROBOT_SIZE);
+    g.stroke({ color, width: 2 });
+    // Aiming direction line
+    g.moveTo(0, 0);
+    g.lineTo(ROBOT_SIZE + 8, 0);
+    g.stroke({ color, width: 3 });
 }
 
 export function renderTick(tickData) {
