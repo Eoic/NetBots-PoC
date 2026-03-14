@@ -32,7 +32,7 @@ pub fn detect_bullet_robot_collisions(world: &GameWorld) -> Vec<BulletHit> {
     let mut hits = Vec::new();
     for (bi, bullet) in world.bullets.iter().enumerate() {
         for robot in &world.robots {
-            if !robot.alive || robot.id == bullet.owner_id {
+            if !robot.alive || robot.team == bullet.owner_team {
                 continue;
             }
             if distance(bullet.x, bullet.y, robot.x, robot.y) < ROBOT_RADIUS {
@@ -97,14 +97,17 @@ pub fn detect_robot_robot_collisions(world: &GameWorld) -> Vec<RobotCollision> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tick::test_world_2v2;
 
     #[test]
     fn test_bullet_hits_robot() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
+        // Robot 1 is at x=550 for team 1
         world.bullets.push(Bullet {
             owner_id: 0,
-            x: 700.0,
-            y: 300.0,
+            owner_team: 0,
+            x: world.robots[1].x,
+            y: world.robots[1].y,
             heading: 0.0,
             speed: BULLET_SPEED,
             power: 1.0,
@@ -116,10 +119,11 @@ mod tests {
     }
 
     #[test]
-    fn test_bullet_doesnt_hit_owner() {
-        let mut world = GameWorld::new();
+    fn test_bullet_doesnt_hit_teammate() {
+        let mut world = test_world_2v2();
         world.bullets.push(Bullet {
             owner_id: 0,
+            owner_team: 0,
             x: 100.0,
             y: 300.0,
             heading: 0.0,
@@ -132,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_wall_collision_at_boundary() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         world.robots[0].x = 5.0;
         let collisions = detect_robot_wall_collisions(&world);
         assert_eq!(collisions.len(), 1);
@@ -141,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_robot_robot_collision() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         world.robots[0].x = 400.0;
         world.robots[0].y = 300.0;
         world.robots[1].x = 420.0;

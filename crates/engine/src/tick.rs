@@ -165,6 +165,7 @@ pub fn run_resolution_phase(world: &mut GameWorld, all_actions: &[PlayerActions]
                     let heading_rad = robot.heading.to_radians();
                     world.bullets.push(Bullet {
                         owner_id: robot.id,
+                        owner_team: robot.team,
                         x: robot.x + heading_rad.cos() * ROBOT_RADIUS,
                         y: robot.y - heading_rad.sin() * ROBOT_RADIUS,
                         heading: robot.heading,
@@ -224,6 +225,8 @@ pub fn capture_snapshot(world: &GameWorld, events: Vec<GameEvent>) -> TickSnapsh
             .iter()
             .map(|r| RobotSnapshot {
                 id: r.id,
+                name: r.name.clone(),
+                team: r.team,
                 x: r.x,
                 y: r.y,
                 heading: r.heading,
@@ -235,6 +238,7 @@ pub fn capture_snapshot(world: &GameWorld, events: Vec<GameEvent>) -> TickSnapsh
             .bullets
             .iter()
             .map(|b| BulletSnapshot {
+                owner_id: b.owner_id,
                 x: b.x,
                 y: b.y,
                 heading: b.heading,
@@ -246,26 +250,28 @@ pub fn capture_snapshot(world: &GameWorld, events: Vec<GameEvent>) -> TickSnapsh
 
 /// Check win conditions and update game status.
 pub fn check_win(world: &mut GameWorld) {
-    let alive: Vec<usize> = world
+    let alive_teams: std::collections::HashSet<u8> = world
         .robots
         .iter()
         .filter(|r| r.alive)
-        .map(|r| r.id)
+        .map(|r| r.team)
         .collect();
 
-    if alive.len() <= 1 {
+    if alive_teams.len() <= 1 {
         world.status = GameStatus::Finished {
-            winner: alive.first().copied(),
+            winner_team: alive_teams.into_iter().next(),
         };
     } else if world.tick >= MAX_TICKS {
-        // Highest energy wins
-        let winner = world
-            .robots
-            .iter()
-            .filter(|r| r.alive)
-            .max_by(|a, b| a.energy.partial_cmp(&b.energy).unwrap())
-            .map(|r| r.id);
-        world.status = GameStatus::Finished { winner };
+        // Sum energy per team, highest total wins
+        let mut team_energy: std::collections::HashMap<u8, f64> = std::collections::HashMap::new();
+        for robot in world.robots.iter().filter(|r| r.alive) {
+            *team_energy.entry(robot.team).or_insert(0.0) += robot.energy;
+        }
+        let winner_team = team_energy
+            .into_iter()
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .map(|(team, _)| team);
+        world.status = GameStatus::Finished { winner_team };
     }
 }
 
@@ -280,7 +286,7 @@ pub fn compute_scan(world: &GameWorld, robot_id: usize) -> f64 {
     let heading_rad = robot.heading.to_radians();
 
     for other in &world.robots {
-        if other.id == robot_id || !other.alive {
+        if other.team == robot.team || !other.alive {
             continue;
         }
         let dx = other.x - robot.x;
@@ -340,12 +346,20 @@ pub fn run_tick(
 }
 
 #[cfg(test)]
+pub(crate) fn test_world_2v2() -> GameWorld {
+    GameWorld::new(&[
+        RobotConfig { name: "bot-0".to_string(), team: 0 },
+        RobotConfig { name: "bot-1".to_string(), team: 1 },
+    ])
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_robot_moves_forward() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         let initial_x = world.robots[0].x;
         let actions = vec![
             PlayerActions {
@@ -362,7 +376,7 @@ mod tests {
 
     #[test]
     fn test_robot_rotates() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         let actions = vec![
             PlayerActions {
                 actions: vec![RobotAction::Rotate(5.0)],
@@ -376,7 +390,7 @@ mod tests {
 
     #[test]
     fn test_robot_shoots() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         world.robots[0].gun_heat = 0.0; // Cool the gun
 
         let actions = vec![
@@ -393,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_speed_clamped() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         let actions = vec![
             PlayerActions {
                 actions: vec![RobotAction::SetSpeed(100.0)],
@@ -407,7 +421,7 @@ mod tests {
 
     #[test]
     fn test_rotation_clamped() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         let actions = vec![
             PlayerActions {
                 actions: vec![RobotAction::Rotate(50.0)],
@@ -421,7 +435,7 @@ mod tests {
 
     #[test]
     fn test_only_first_action_of_each_type_applied() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         let actions = vec![
             PlayerActions {
                 actions: vec![
@@ -438,7 +452,7 @@ mod tests {
 
     #[test]
     fn test_gun_heat_prevents_shooting() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         // gun_heat starts at 1.0
 
         let actions = vec![
@@ -454,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_win_condition_last_alive() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         world.robots[1].alive = false;
 
         let actions = vec![PlayerActions::default(), PlayerActions::default()];
@@ -463,23 +477,23 @@ mod tests {
         assert_eq!(
             world.status,
             GameStatus::Finished {
-                winner: Some(0)
+                winner_team: Some(0)
             }
         );
     }
 
     #[test]
     fn test_scan_finds_enemy_in_arc() {
-        let world = GameWorld::new();
-        // Robot 0 at (100, 300) heading 0°, Robot 1 at (700, 300) — directly ahead
+        let world = test_world_2v2();
+        // Robot 0 at x=100 heading 0°, Robot 1 at x=550 — directly ahead
         let dist = compute_scan(&world, 0);
         assert!(dist > 0.0);
-        assert!((dist - 600.0).abs() < 1.0);
+        assert!((dist - 450.0).abs() < 1.0);
     }
 
     #[test]
     fn test_scan_misses_enemy_outside_arc() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         world.robots[0].heading = 90.0; // Facing up, enemy is to the right
         let dist = compute_scan(&world, 0);
         assert_eq!(dist, -1.0);
@@ -487,9 +501,10 @@ mod tests {
 
     #[test]
     fn test_bullet_moves() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         world.bullets.push(Bullet {
             owner_id: 0,
+            owner_team: 0,
             x: 400.0,
             y: 300.0,
             heading: 0.0,
@@ -503,9 +518,10 @@ mod tests {
 
     #[test]
     fn test_bullet_removed_out_of_bounds() {
-        let mut world = GameWorld::new();
+        let mut world = test_world_2v2();
         world.bullets.push(Bullet {
             owner_id: 0,
+            owner_team: 0,
             x: 799.0,
             y: 300.0,
             heading: 0.0,
