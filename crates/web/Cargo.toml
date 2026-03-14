@@ -13,5 +13,6 @@ dashmap = "6"
 uuid = { version = "1", features = ["v4"] }
 engine = { path = "../engine" }
 wasm_runner = { path = "../wasm_runner" }
+askama = "0.15"
 anyhow = "1"
 tempfile = "3"

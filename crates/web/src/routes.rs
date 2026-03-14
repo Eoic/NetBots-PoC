@@ -1,10 +1,20 @@
 use std::sync::{Arc, Mutex};
 
+use askama::Template;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::Json;
+use axum::response::{Html, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+#[derive(Template)]
+#[template(path = "index.html")]
+pub struct IndexTemplate;
+
+pub async fn index() -> Html<String> {
+    let template = IndexTemplate;
+    Html(template.render().unwrap())
+}
 
 use crate::compiler;
 use crate::match_runner;

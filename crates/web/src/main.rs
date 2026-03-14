@@ -21,7 +21,8 @@ async fn main() {
         .route("/api/match/{id}/submit", post(routes::submit_code))
         .route("/api/match/{id}/status", get(routes::match_status))
         .route("/ws/match/{id}", get(ws::ws_handler))
-        .fallback_service(ServeDir::new("../client"))
+        .route("/", get(routes::index))
+        .nest_service("/static", ServeDir::new("crates/web/static"))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
