@@ -70,6 +70,8 @@ Replace the fallback static file serving:
 .nest_service("/static", ServeDir::new("crates/web/static"))
 ```
 
+Note: `ServeDir` path is relative to the working directory. The server must be run from the project root (e.g., `cargo run -p web` from the repo root).
+
 ### Dependency Addition (web/Cargo.toml)
 
 Add `askama` with Axum integration:
@@ -79,7 +81,7 @@ askama = "0.13"
 askama_axum = "0.5"
 ```
 
-Update internal crate paths from `../engine` to `../../engine` (crates moved up one directory level).
+Internal crate paths (`../engine`, `../wasm_runner`) stay unchanged — the sibling relationship between crates is preserved after the move.
 
 ### Asset Path Updates
 
@@ -119,7 +121,7 @@ In `static/js/main.js`:
 After restructuring:
 1. `cargo build` succeeds from project root
 2. `cargo test` passes (all existing tests)
-3. Server starts with `cargo run -p netbots-web` (or updated package name)
+3. Server starts with `cargo run -p web`
 4. Navigating to `http://localhost:3000` renders the page
 5. Static assets load correctly (`/static/style.css`, `/static/js/main.js`, etc.)
 6. Match create/join/submit/replay flow works end-to-end
