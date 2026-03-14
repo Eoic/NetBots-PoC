@@ -1,0 +1,16 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "esbuild js-src/main.js --bundle --format=esm --external:pixi.js --outfile=static/js/app.js --minify"
+  },
+  "dependencies": {
+    "codemirror": "^6.0.1",
+    "@codemirror/lang-javascript": "^6.2.3",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.36.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

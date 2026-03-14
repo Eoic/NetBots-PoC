@@ -4,3 +4,4 @@ node_modules/
 /package-lock.json
 .claude/
 CLAUDE.md
+crates/web/static/js/app.js
