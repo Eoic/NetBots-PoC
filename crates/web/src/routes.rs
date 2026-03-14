@@ -1,219 +1,218 @@
-use std::sync::{Arc, Mutex};
-
 use askama::Template;
-use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{Html, Json};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+
+use engine::world::RobotConfig;
+
+use crate::compiler;
+use crate::match_runner;
 
 #[derive(Template)]
 #[template(path = "index.html")]
 pub struct IndexTemplate;
 
 pub async fn index() -> Html<String> {
-    let template = IndexTemplate;
-    Html(template.render().unwrap())
-}
-
-use crate::compiler;
-use crate::match_runner;
-use crate::state::*;
-
-#[derive(Serialize)]
-pub struct CreateMatchResponse {
-    pub match_id: String,
-}
-
-pub async fn create_match(State(state): State<AppState>) -> Json<CreateMatchResponse> {
-    let match_id = Uuid::new_v4().to_string();
-    let game_match = GameMatch {
-        id: match_id.clone(),
-        players: Vec::new(),
-        status: MatchStatus::WaitingForPlayers,
-        wasm_modules: vec![None, None],
-        replay: None,
-    };
-    state
-        .matches
-        .insert(match_id.clone(), Arc::new(Mutex::new(game_match)));
-    Json(CreateMatchResponse { match_id })
-}
-
-#[derive(Serialize)]
-pub struct JoinMatchResponse {
-    pub player_id: String,
-    pub token: String,
-    pub player_index: usize,
-}
-
-#[derive(Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-}
-
-pub async fn join_match(
-    State(state): State<AppState>,
-    Path(match_id): Path<String>,
-) -> Result<Json<JoinMatchResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let game = state.matches.get(&match_id).ok_or((
-        StatusCode::NOT_FOUND,
-        Json(ErrorResponse {
-            error: "Match not found".to_string(),
-        }),
-    ))?;
-
-    let mut game = game.lock().unwrap();
-
-    if game.players.len() >= 2 {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "Match is full".to_string(),
-            }),
-        ));
-    }
-
-    let player_id = Uuid::new_v4().to_string();
-    let token = Uuid::new_v4().to_string();
-    let player_index = game.players.len();
-
-    game.players.push(Player {
-        id: player_id.clone(),
-        token: token.clone(),
-    });
-
-    Ok(Json(JoinMatchResponse {
-        player_id,
-        token,
-        player_index,
-    }))
+    Html(IndexTemplate.render().unwrap())
 }
 
 #[derive(Deserialize)]
-pub struct SubmitRequest {
+pub struct RunRequest {
+    pub robots: Vec<RobotEntry>,
+}
+
+#[derive(Deserialize)]
+pub struct RobotEntry {
+    pub name: String,
     pub source: String,
-    pub language: String,
-    pub token: String,
+    pub team: u8,
 }
 
 #[derive(Serialize)]
-pub struct SubmitResponse {
+pub struct RunResponse {
     pub ok: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
+    pub replay: Option<ReplayData>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub game_started: Option<bool>,
-}
-
-pub async fn submit_code(
-    State(state): State<AppState>,
-    Path(match_id): Path<String>,
-    Json(req): Json<SubmitRequest>,
-) -> Result<Json<SubmitResponse>, (StatusCode, Json<ErrorResponse>)> {
-    // Find match and validate token
-    let game_arc = state.matches.get(&match_id).ok_or((
-        StatusCode::NOT_FOUND,
-        Json(ErrorResponse {
-            error: "Match not found".to_string(),
-        }),
-    ))?.clone();
-
-    let player_index = {
-        let game = game_arc.lock().unwrap();
-        game.players
-            .iter()
-            .position(|p| p.token == req.token)
-            .ok_or((
-                StatusCode::UNAUTHORIZED,
-                Json(ErrorResponse {
-                    error: "Invalid token".to_string(),
-                }),
-            ))?
-    };
-
-    // Compile the source code
-    let wasm_bytes = match compiler::compile(&req.source, &req.language).await {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            return Ok(Json(SubmitResponse {
-                ok: false,
-                error: Some(format!("Compilation failed: {}", e)),
-                game_started: None,
-            }));
-        }
-    };
-
-    // Store compiled WASM and check if both players are ready
-    let should_run = {
-        let mut game = game_arc.lock().unwrap();
-        game.wasm_modules[player_index] = Some(wasm_bytes);
-        game.wasm_modules.iter().all(|m| m.is_some())
-    };
-
-    if should_run {
-        // Both players submitted — run the simulation
-        let wasm_modules: Vec<Vec<u8>> = {
-            let game = game_arc.lock().unwrap();
-            game.wasm_modules
-                .iter()
-                .map(|m| m.as_ref().unwrap().clone())
-                .collect()
-        };
-
-        {
-            let mut game = game_arc.lock().unwrap();
-            game.status = MatchStatus::Running;
-        }
-
-        match match_runner::run_match(&wasm_modules) {
-            Ok((replay, winner)) => {
-                let mut game = game_arc.lock().unwrap();
-                game.replay = Some(replay);
-                game.status = MatchStatus::Finished { winner };
-            }
-            Err(e) => {
-                let mut game = game_arc.lock().unwrap();
-                game.status = MatchStatus::Error(format!("Simulation failed: {}", e));
-            }
-        }
-
-        return Ok(Json(SubmitResponse {
-            ok: true,
-            error: None,
-            game_started: Some(true),
-        }));
-    }
-
-    Ok(Json(SubmitResponse {
-        ok: true,
-        error: None,
-        game_started: Some(false),
-    }))
+    pub winner_team: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_ticks: Option<u32>,
+    #[serde(default)]
+    pub errors: Vec<RobotError>,
+    #[serde(default)]
+    pub logs: Vec<RobotLog>,
 }
 
 #[derive(Serialize)]
-pub struct MatchStatusResponse {
-    pub status: MatchStatus,
-    pub players: usize,
-    pub has_replay: bool,
+pub struct ReplayData {
+    pub arena: ArenaInfo,
+    pub robots: Vec<RobotInfo>,
+    pub ticks: Vec<engine::world::TickSnapshot>,
 }
 
-pub async fn match_status(
-    State(state): State<AppState>,
-    Path(match_id): Path<String>,
-) -> Result<Json<MatchStatusResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let game_arc = state.matches.get(&match_id).ok_or((
-        StatusCode::NOT_FOUND,
-        Json(ErrorResponse {
-            error: "Match not found".to_string(),
-        }),
-    ))?;
+#[derive(Serialize)]
+pub struct ArenaInfo {
+    pub width: f64,
+    pub height: f64,
+}
 
-    let game = game_arc.lock().unwrap();
-    Ok(Json(MatchStatusResponse {
-        status: game.status.clone(),
-        players: game.players.len(),
-        has_replay: game.replay.is_some(),
-    }))
+#[derive(Serialize)]
+pub struct RobotInfo {
+    pub name: String,
+    pub team: u8,
+}
+
+#[derive(Serialize)]
+pub struct RobotError {
+    pub robot: String,
+    pub error: String,
+}
+
+#[derive(Serialize)]
+pub struct RobotLog {
+    pub robot: String,
+    pub messages: Vec<String>,
+}
+
+pub async fn run(Json(req): Json<RunRequest>) -> (StatusCode, Json<RunResponse>) {
+    if req.robots.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(RunResponse {
+                ok: false,
+                replay: None,
+                winner_team: None,
+                total_ticks: None,
+                errors: vec![RobotError {
+                    robot: String::new(),
+                    error: "No robots provided".to_string(),
+                }],
+                logs: vec![],
+            }),
+        );
+    }
+
+    // Compile all robots concurrently
+    let compile_futures: Vec<_> = req
+        .robots
+        .iter()
+        .map(|r| {
+            let source = r.source.clone();
+            let name = r.name.clone();
+            async move { (name, compiler::compile(&source).await) }
+        })
+        .collect();
+
+    let results = futures::future::join_all(compile_futures).await;
+
+    let mut wasm_modules = Vec::new();
+    let mut errors = Vec::new();
+
+    for (name, result) in results {
+        match result {
+            Ok(bytes) => wasm_modules.push(bytes),
+            Err(e) => errors.push(RobotError {
+                robot: name,
+                error: e.to_string(),
+            }),
+        }
+    }
+
+    if !errors.is_empty() {
+        return (
+            StatusCode::OK,
+            Json(RunResponse {
+                ok: false,
+                replay: None,
+                winner_team: None,
+                total_ticks: None,
+                errors,
+                logs: vec![],
+            }),
+        );
+    }
+
+    let configs: Vec<RobotConfig> = req
+        .robots
+        .iter()
+        .map(|r| RobotConfig {
+            name: r.name.clone(),
+            team: r.team,
+        })
+        .collect();
+
+    // Run simulation (blocking — use spawn_blocking)
+    let result =
+        tokio::task::spawn_blocking(move || match_runner::run_match(&configs, &wasm_modules))
+            .await;
+
+    match result {
+        Ok(Ok(match_result)) => {
+            let robots: Vec<RobotInfo> = req
+                .robots
+                .iter()
+                .map(|r| RobotInfo {
+                    name: r.name.clone(),
+                    team: r.team,
+                })
+                .collect();
+
+            let logs: Vec<RobotLog> = match_result
+                .logs
+                .into_iter()
+                .filter(|(_, msgs)| !msgs.is_empty())
+                .map(|(name, messages)| RobotLog {
+                    robot: name,
+                    messages,
+                })
+                .collect();
+
+            (
+                StatusCode::OK,
+                Json(RunResponse {
+                    ok: true,
+                    replay: Some(ReplayData {
+                        arena: ArenaInfo {
+                            width: engine::world::ARENA_WIDTH,
+                            height: engine::world::ARENA_HEIGHT,
+                        },
+                        robots,
+                        ticks: match_result.replay,
+                    }),
+                    winner_team: match_result.winner_team,
+                    total_ticks: Some(match_result.total_ticks),
+                    errors: vec![],
+                    logs,
+                }),
+            )
+        }
+        Ok(Err(e)) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(RunResponse {
+                ok: false,
+                replay: None,
+                winner_team: None,
+                total_ticks: None,
+                errors: vec![RobotError {
+                    robot: String::new(),
+                    error: format!("Simulation error: {}", e),
+                }],
+                logs: vec![],
+            }),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(RunResponse {
+                ok: false,
+                replay: None,
+                winner_team: None,
+                total_ticks: None,
+                errors: vec![RobotError {
+                    robot: String::new(),
+                    error: format!("Task error: {}", e),
+                }],
+                logs: vec![],
+            }),
+        ),
+    }
 }

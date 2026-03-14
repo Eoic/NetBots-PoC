@@ -9,8 +9,7 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tower-http = { version = "0.6", features = ["cors", "fs"] }
-dashmap = "6"
-uuid = { version = "1", features = ["v4"] }
+futures = "0.3"
 engine = { path = "../engine" }
 wasm_runner = { path = "../wasm_runner" }
 askama = "0.15"
