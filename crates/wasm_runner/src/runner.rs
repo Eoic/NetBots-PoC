@@ -44,6 +44,7 @@ impl RobotRunner {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn call_on_tick(
         &mut self,
         tick: u32,
@@ -61,14 +62,26 @@ impl RobotRunner {
 
         let on_tick = self
             .instance
-            .get_typed_func::<(u32, f64, f64, f64, f64, f64, f64), ()>(&mut self.store, "on_tick")?;
+            .get_typed_func::<(u32, f64, f64, f64, f64, f64, f64), ()>(
+                &mut self.store,
+                "on_tick",
+            )?;
 
-        match on_tick.call(&mut self.store, (tick, energy, x, y, heading, speed, gun_heat)) {
+        match on_tick.call(
+            &mut self.store,
+            (tick, energy, x, y, heading, speed, gun_heat),
+        ) {
             Ok(()) => {}
             Err(e) => {
                 // If fuel exhausted, robot forfeits turn but doesn't crash
-                if e.downcast_ref::<Trap>().map_or(false, |t| *t == Trap::OutOfFuel) {
-                    eprintln!("[robot {}] out of fuel on tick {}", self.store.data().robot_id, tick);
+                if e.downcast_ref::<Trap>()
+                    .is_some_and(|t| *t == Trap::OutOfFuel)
+                {
+                    eprintln!(
+                        "[robot {}] out of fuel on tick {}",
+                        self.store.data().robot_id,
+                        tick
+                    );
                 } else {
                     // Non-fuel trap — log it, set trapped flag (caller will kill robot)
                     self.store.data_mut().logs.push(format!("WASM trap: {}", e));
@@ -91,8 +104,13 @@ impl RobotRunner {
         match on_hit.call(&mut self.store, (damage,)) {
             Ok(()) => {}
             Err(e) => {
-                if e.downcast_ref::<Trap>().map_or(false, |t| *t == Trap::OutOfFuel) {
-                    eprintln!("[robot {}] out of fuel on on_hit", self.store.data().robot_id);
+                if e.downcast_ref::<Trap>()
+                    .is_some_and(|t| *t == Trap::OutOfFuel)
+                {
+                    eprintln!(
+                        "[robot {}] out of fuel on on_hit",
+                        self.store.data().robot_id
+                    );
                 } else {
                     // Non-fuel trap — log it, set trapped flag (caller will kill robot)
                     self.store.data_mut().logs.push(format!("WASM trap: {}", e));
@@ -115,8 +133,13 @@ impl RobotRunner {
         match on_collision.call(&mut self.store, (kind, x, y)) {
             Ok(()) => {}
             Err(e) => {
-                if e.downcast_ref::<Trap>().map_or(false, |t| *t == Trap::OutOfFuel) {
-                    eprintln!("[robot {}] out of fuel on on_collision", self.store.data().robot_id);
+                if e.downcast_ref::<Trap>()
+                    .is_some_and(|t| *t == Trap::OutOfFuel)
+                {
+                    eprintln!(
+                        "[robot {}] out of fuel on on_collision",
+                        self.store.data().robot_id
+                    );
                 } else {
                     // Non-fuel trap — log it, set trapped flag (caller will kill robot)
                     self.store.data_mut().logs.push(format!("WASM trap: {}", e));

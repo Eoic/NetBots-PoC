@@ -31,6 +31,8 @@ pub struct GameWorld {
 }
 
 impl GameWorld {
+    /// Create a new game world. Invariant: `robot.id == index in self.robots`.
+    /// Collision structs store robot IDs which are used as direct vector indices.
     pub fn new(configs: &[RobotConfig]) -> Self {
         let team0: Vec<usize> = configs
             .iter()

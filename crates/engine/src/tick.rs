@@ -132,7 +132,10 @@ pub fn run_events_phase(world: &mut GameWorld) -> (TickEvents, Vec<GameEvent>) {
 }
 
 /// Run the resolution phase (phase 3): apply buffered actions to robots.
-pub fn run_resolution_phase(world: &mut GameWorld, all_actions: &[PlayerActions]) -> Vec<GameEvent> {
+pub fn run_resolution_phase(
+    world: &mut GameWorld,
+    all_actions: &[PlayerActions],
+) -> Vec<GameEvent> {
     let mut game_events = Vec::new();
 
     for (i, player_actions) in all_actions.iter().enumerate() {
@@ -147,8 +150,7 @@ pub fn run_resolution_phase(world: &mut GameWorld, all_actions: &[PlayerActions]
         for action in &player_actions.actions {
             match action {
                 RobotAction::SetSpeed(speed) if !speed_set => {
-                    world.robots[i].speed =
-                        speed.clamp(-MAX_BACKWARD_SPEED, MAX_FORWARD_SPEED);
+                    world.robots[i].speed = speed.clamp(-MAX_BACKWARD_SPEED, MAX_FORWARD_SPEED);
                     speed_set = true;
                 }
                 RobotAction::Rotate(angle) if !rotated => {
@@ -196,8 +198,12 @@ pub fn run_physics_phase(world: &mut GameWorld) {
         robot.y -= heading_rad.sin() * robot.speed; // Y-down screen coords
 
         // Clamp to arena
-        robot.x = robot.x.clamp(ROBOT_RADIUS, world.arena_width - ROBOT_RADIUS);
-        robot.y = robot.y.clamp(ROBOT_RADIUS, world.arena_height - ROBOT_RADIUS);
+        robot.x = robot
+            .x
+            .clamp(ROBOT_RADIUS, world.arena_width - ROBOT_RADIUS);
+        robot.y = robot
+            .y
+            .clamp(ROBOT_RADIUS, world.arena_height - ROBOT_RADIUS);
 
         // Cool gun
         robot.gun_heat = (robot.gun_heat - GUN_COOLDOWN_RATE).max(0.0);
@@ -319,10 +325,7 @@ pub fn compute_scan(world: &GameWorld, robot_id: usize) -> f64 {
 /// Run a complete tick. The caller is responsible for calling WASM functions
 /// (on_hit, on_collision, on_tick) and collecting actions.
 /// This function handles resolution, physics, capture, and win check.
-pub fn run_tick(
-    world: &mut GameWorld,
-    all_actions: &[PlayerActions],
-) -> TickSnapshot {
+pub fn run_tick(world: &mut GameWorld, all_actions: &[PlayerActions]) -> TickSnapshot {
     world.tick += 1;
 
     // Phase 1: Events (collision detection + damage) is handled externally
@@ -348,8 +351,14 @@ pub fn run_tick(
 #[cfg(test)]
 pub(crate) fn test_world_2v2() -> GameWorld {
     GameWorld::new(&[
-        RobotConfig { name: "bot-0".to_string(), team: 0 },
-        RobotConfig { name: "bot-1".to_string(), team: 1 },
+        RobotConfig {
+            name: "bot-0".to_string(),
+            team: 0,
+        },
+        RobotConfig {
+            name: "bot-1".to_string(),
+            team: 1,
+        },
     ])
 }
 

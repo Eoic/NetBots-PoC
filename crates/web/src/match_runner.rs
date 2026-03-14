@@ -15,8 +15,7 @@ pub fn run_match(configs: &[RobotConfig], wasm_modules: &[Vec<u8>]) -> Result<Ma
         .iter()
         .enumerate()
         .map(|(id, bytes)| {
-            RobotRunner::new(bytes, id)
-                .context(format!("Failed to create runner for robot {}", id))
+            RobotRunner::new(bytes, id).context(format!("Failed to create runner for robot {}", id))
         })
         .collect::<Result<Vec<_>>>()?;
 
@@ -43,8 +42,7 @@ pub fn run_match(configs: &[RobotConfig], wasm_modules: &[Vec<u8>]) -> Result<Ma
 
         for col in &tick_events.collisions {
             if col.robot_id < runners.len() && world.robots[col.robot_id].alive {
-                if let Ok(actions) =
-                    runners[col.robot_id].call_on_collision(col.kind, col.x, col.y)
+                if let Ok(actions) = runners[col.robot_id].call_on_collision(col.kind, col.x, col.y)
                 {
                     all_actions[col.robot_id].actions.extend(actions);
                 }

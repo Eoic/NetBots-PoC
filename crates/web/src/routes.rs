@@ -74,22 +74,49 @@ pub struct RobotLog {
     pub messages: Vec<String>,
 }
 
+const MAX_ROBOTS: usize = 16;
+const MAX_SOURCE_BYTES: usize = 64 * 1024; // 64 KB per robot
+
+fn error_response(status: StatusCode, msg: &str) -> (StatusCode, Json<RunResponse>) {
+    (
+        status,
+        Json(RunResponse {
+            ok: false,
+            replay: None,
+            winner_team: None,
+            total_ticks: None,
+            errors: vec![RobotError {
+                robot: String::new(),
+                error: msg.to_string(),
+            }],
+            logs: vec![],
+        }),
+    )
+}
+
 pub async fn run(Json(req): Json<RunRequest>) -> (StatusCode, Json<RunResponse>) {
     if req.robots.is_empty() {
-        return (
+        return error_response(StatusCode::BAD_REQUEST, "No robots provided");
+    }
+
+    if req.robots.len() > MAX_ROBOTS {
+        return error_response(
             StatusCode::BAD_REQUEST,
-            Json(RunResponse {
-                ok: false,
-                replay: None,
-                winner_team: None,
-                total_ticks: None,
-                errors: vec![RobotError {
-                    robot: String::new(),
-                    error: "No robots provided".to_string(),
-                }],
-                logs: vec![],
-            }),
+            &format!("Too many robots (max {})", MAX_ROBOTS),
         );
+    }
+
+    for r in &req.robots {
+        if r.source.len() > MAX_SOURCE_BYTES {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                &format!(
+                    "Source for '{}' exceeds {} KB limit",
+                    r.name,
+                    MAX_SOURCE_BYTES / 1024
+                ),
+            );
+        }
     }
 
     // Compile all robots concurrently
@@ -143,8 +170,7 @@ pub async fn run(Json(req): Json<RunRequest>) -> (StatusCode, Json<RunResponse>)
 
     // Run simulation (blocking — use spawn_blocking)
     let result =
-        tokio::task::spawn_blocking(move || match_runner::run_match(&configs, &wasm_modules))
-            .await;
+        tokio::task::spawn_blocking(move || match_runner::run_match(&configs, &wasm_modules)).await;
 
     match result {
         Ok(Ok(match_result)) => {

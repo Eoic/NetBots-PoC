@@ -8,16 +8,22 @@ pub async fn compile(source: &str) -> Result<Vec<u8>> {
     let source_path = tmp_dir.path().join("robot.ts");
     let output_path = tmp_dir.path().join("robot.wasm");
 
-    fs::write(&source_path, source).await.context("Failed to write source file")?;
+    fs::write(&source_path, source)
+        .await
+        .context("Failed to write source file")?;
 
     let output = tokio::time::timeout(
         Duration::from_secs(10),
         Command::new("npx")
             .args([
-                "--yes", "asc",
-                source_path.to_str().unwrap(),
-                "--outFile", output_path.to_str().unwrap(),
-                "--optimize", "--runtime", "stub",
+                "--yes",
+                "asc",
+                source_path.to_str().context("Non-UTF8 temp path")?,
+                "--outFile",
+                output_path.to_str().context("Non-UTF8 temp path")?,
+                "--optimize",
+                "--runtime",
+                "stub",
             ])
             .output(),
     )
@@ -30,5 +36,7 @@ pub async fn compile(source: &str) -> Result<Vec<u8>> {
         anyhow::bail!("Compilation failed:\n{}\n{}", stderr, stdout);
     }
 
-    fs::read(&output_path).await.context("Failed to read compiled WASM")
+    fs::read(&output_path)
+        .await
+        .context("Failed to read compiled WASM")
 }
