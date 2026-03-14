@@ -8,95 +8,93 @@
     <script type="importmap">
     {
         "imports": {
-            "pixi.js": "https://cdn.jsdelivr.net/npm/pixi.js@8/dist/pixi.min.mjs"
+            "pixi.js": "https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.mjs",
+            "codemirror": "https://esm.sh/codemirror@6.0.1",
+            "@codemirror/lang-javascript": "https://esm.sh/@codemirror/lang-javascript@6.2.3",
+            "@codemirror/theme-one-dark": "https://esm.sh/@codemirror/theme-one-dark@6.1.2",
+            "@codemirror/state": "https://esm.sh/@codemirror/state@6.5.2",
+            "@codemirror/view": "https://esm.sh/@codemirror/view@6.36.5"
         }
     }
     </script>
 </head>
 <body>
-    <header>
-        <h1>NetBots</h1>
-        <span id="tick-display" style="color: #888; font-size: 12px;"></span>
-    </header>
-
-    <div class="main">
-        <!-- Top area: Arena + Controls side by side -->
-        <div class="top-area">
-            <!-- Arena Panel -->
-            <div class="panel arena-panel">
-                <div class="panel-header">Arena</div>
+    <div class="app">
+        <!-- Left column: arena + editor -->
+        <div class="left-column">
+            <!-- Arena -->
+            <div class="arena-panel" id="arena-panel">
                 <div id="arena"></div>
+                <div id="arena-overlay" class="arena-overlay">Press Run to start</div>
             </div>
 
-            <!-- Controls Panel -->
-            <div class="panel controls-panel">
-                <div class="panel-header">Controls</div>
-                <div class="controls">
-                    <button id="btn-create" class="primary">Create Match</button>
+            <!-- Resize handle -->
+            <div class="resize-handle" id="resize-handle"></div>
 
-                    <div class="field">
-                        <label>Match ID</label>
-                        <input type="text" id="match-id-input" placeholder="Paste match ID to join">
-                    </div>
-                    <button id="btn-join">Join Match</button>
-
-                    <div class="field">
-                        <label>Current Match</label>
-                        <span id="match-id-display" style="font-size: 11px; color: #00ff88; word-break: break-all;">None</span>
-                    </div>
-
-                    <hr style="border-color: #333;">
-
-                    <button id="btn-submit" disabled>Submit Code</button>
-                    <button id="btn-watch" disabled>Watch Replay</button>
+            <!-- Editor panel -->
+            <div class="editor-panel" id="editor-panel">
+                <!-- Tab bar -->
+                <div class="tab-bar">
+                    <button class="tab active" data-tab="code">Code</button>
+                    <button class="tab" data-tab="logs">Logs</button>
                 </div>
-                <div id="log"></div>
+                <div class="editor-body">
+                    <!-- File tree -->
+                    <div class="file-tree" id="file-tree"></div>
+                    <!-- Code editor -->
+                    <div class="editor-content" id="editor-content">
+                        <div id="codemirror-container"></div>
+                        <pre id="logs-container" class="hidden"></pre>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- Resize handle -->
-        <div class="resize-handle" id="resize-handle"></div>
+        <!-- Right sidebar: controls -->
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <button id="btn-run" class="primary run-btn">Run</button>
+                <div class="shortcut-hint">Ctrl+Enter</div>
+            </div>
 
-        <!-- Bottom area: Code editor -->
-        <div class="bottom-area" id="bottom-area">
-            <div class="panel editor-panel">
-                <div class="panel-header">Robot Code (AssemblyScript)</div>
-                <textarea id="code-editor" spellcheck="false"></textarea>
+            <div class="sidebar-section">
+                <label class="sidebar-label">Add Bot</label>
+                <div class="add-bot-row">
+                    <select id="template-select">
+                        <option value="sitter">Sitter</option>
+                        <option value="spinner">Spinner</option>
+                        <option value="chaser" selected>Chaser</option>
+                        <option value="wall-hugger">Wall Hugger</option>
+                    </select>
+                    <button id="btn-add-bot">+</button>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <label class="sidebar-label">Replay</label>
+                <div class="replay-controls">
+                    <div class="replay-buttons">
+                        <button id="btn-restart" disabled title="Restart">&#8634;</button>
+                        <button id="btn-play-pause" disabled title="Play/Pause">&#9654;</button>
+                    </div>
+                    <div class="speed-buttons">
+                        <button class="speed-btn" data-speed="0.5">0.5x</button>
+                        <button class="speed-btn active" data-speed="1">1x</button>
+                        <button class="speed-btn" data-speed="2">2x</button>
+                        <button class="speed-btn" data-speed="4">4x</button>
+                    </div>
+                    <input type="range" id="tick-scrubber" min="0" max="0" value="0" disabled>
+                    <div id="tick-display" class="tick-display">0 / 0</div>
+                </div>
+            </div>
+
+            <div class="sidebar-section results" id="results-section" style="display:none;">
+                <label class="sidebar-label">Result</label>
+                <div id="result-text"></div>
             </div>
         </div>
     </div>
 
     <script type="module" src="/static/js/main.js"></script>
-    <script>
-        // Vertical resize handle logic
-        const handle = document.getElementById('resize-handle');
-        const bottomArea = document.getElementById('bottom-area');
-        let isResizing = false;
-
-        handle.addEventListener('mousedown', (e) => {
-            isResizing = true;
-            document.body.style.cursor = 'row-resize';
-            document.body.style.userSelect = 'none';
-            e.preventDefault();
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isResizing) return;
-            const mainEl = document.querySelector('.main');
-            const mainRect = mainEl.getBoundingClientRect();
-            const newBottomHeight = mainRect.bottom - e.clientY;
-            const clamped = Math.max(100, Math.min(newBottomHeight, mainRect.height - 200));
-            bottomArea.style.flex = 'none';
-            bottomArea.style.height = clamped + 'px';
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (isResizing) {
-                isResizing = false;
-                document.body.style.cursor = '';
-                document.body.style.userSelect = '';
-            }
-        });
-    </script>
 </body>
 </html>
