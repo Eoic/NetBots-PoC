@@ -30,7 +30,7 @@ function log(message, type = '') {
 // Load robot template
 async function loadTemplate() {
     try {
-        const resp = await fetch('/robot-template.ts');
+        const resp = await fetch('/static/robot-template.ts');
         editor.value = await resp.text();
     } catch {
         editor.value = '// Failed to load template. Write your robot code here.';
