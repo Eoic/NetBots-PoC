@@ -1,4 +1,4 @@
-use engine::world::*;
+use engine::world::{GameStatus, GameWorld, PlayerActions, RobotAction, RobotConfig};
 use engine::tick::*;
 use wasm_runner::RobotRunner;
 
@@ -69,7 +69,10 @@ fn test_full_simulation_with_wasm() {
         RobotRunner::new(&wasm_bytes, 1).expect("Failed to create runner 1"),
     ];
 
-    let mut world = GameWorld::new();
+    let mut world = GameWorld::new(&[
+        RobotConfig { name: "bot-0".to_string(), team: 0 },
+        RobotConfig { name: "bot-1".to_string(), team: 1 },
+    ]);
 
     for _ in 0..50 {
         if world.status != GameStatus::Running {

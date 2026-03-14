@@ -29,6 +29,14 @@ impl RobotRunner {
         Ok(Self { store, instance })
     }
 
+    pub fn take_logs(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.store.data_mut().logs)
+    }
+
+    pub fn has_trapped(&self) -> bool {
+        self.store.data().trapped
+    }
+
     fn refuel(&mut self) -> Result<()> {
         // Drain remaining fuel and set fresh amount
         let _ = self.store.get_fuel()?;
@@ -62,7 +70,9 @@ impl RobotRunner {
                 if e.downcast_ref::<Trap>().map_or(false, |t| *t == Trap::OutOfFuel) {
                     eprintln!("[robot {}] out of fuel on tick {}", self.store.data().robot_id, tick);
                 } else {
-                    return Err(e);
+                    // Non-fuel trap — log it, set trapped flag (caller will kill robot)
+                    self.store.data_mut().logs.push(format!("WASM trap: {}", e));
+                    self.store.data_mut().trapped = true;
                 }
             }
         }
@@ -84,7 +94,9 @@ impl RobotRunner {
                 if e.downcast_ref::<Trap>().map_or(false, |t| *t == Trap::OutOfFuel) {
                     eprintln!("[robot {}] out of fuel on on_hit", self.store.data().robot_id);
                 } else {
-                    return Err(e);
+                    // Non-fuel trap — log it, set trapped flag (caller will kill robot)
+                    self.store.data_mut().logs.push(format!("WASM trap: {}", e));
+                    self.store.data_mut().trapped = true;
                 }
             }
         }
@@ -106,7 +118,9 @@ impl RobotRunner {
                 if e.downcast_ref::<Trap>().map_or(false, |t| *t == Trap::OutOfFuel) {
                     eprintln!("[robot {}] out of fuel on on_collision", self.store.data().robot_id);
                 } else {
-                    return Err(e);
+                    // Non-fuel trap — log it, set trapped flag (caller will kill robot)
+                    self.store.data_mut().logs.push(format!("WASM trap: {}", e));
+                    self.store.data_mut().trapped = true;
                 }
             }
         }

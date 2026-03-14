@@ -6,6 +6,8 @@ pub struct RobotState {
     pub robot_id: usize,
     pub actions: Vec<RobotAction>,
     pub scan_result: f64, // pre-computed before calling on_tick
+    pub logs: Vec<String>,
+    pub trapped: bool,
 }
 
 impl RobotState {
@@ -14,6 +16,8 @@ impl RobotState {
             robot_id,
             actions: Vec::new(),
             scan_result: -1.0,
+            logs: Vec::new(),
+            trapped: false,
         }
     }
 
@@ -41,12 +45,12 @@ pub fn create_linker(engine: &Engine) -> anyhow::Result<Linker<RobotState>> {
         caller.data().scan_result
     })?;
 
-    linker.func_wrap("env", "log_i32", |_caller: Caller<'_, RobotState>, val: i32| {
-        println!("[robot] i32: {}", val);
+    linker.func_wrap("env", "log_i32", |mut caller: Caller<'_, RobotState>, val: i32| {
+        caller.data_mut().logs.push(format!("i32: {}", val));
     })?;
 
-    linker.func_wrap("env", "log_f64", |_caller: Caller<'_, RobotState>, val: f64| {
-        println!("[robot] f64: {}", val);
+    linker.func_wrap("env", "log_f64", |mut caller: Caller<'_, RobotState>, val: f64| {
+        caller.data_mut().logs.push(format!("f64: {}", val));
     })?;
 
     Ok(linker)
