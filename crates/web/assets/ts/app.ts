@@ -3,13 +3,16 @@ import { dom } from './dom';
 import { CodeEditor } from './editor';
 import { FileStore } from './file-store';
 import { LogPanel } from './logs';
+import { setupManipulation, type ManipulationDeps } from './manipulation';
 import { startBotPlacementMode, PlacementDeps } from './placement';
 import { ReplayController } from './replay';
 import {
     destroy,
     getRobotSceneInfo,
     getArenaViewState,
+    hitTestRotationHandle,
     initArena,
+    isPreviewMode,
     pickRobotNameAtClient,
     refreshSelectedRobotMarker,
     renderPreview,
@@ -111,6 +114,20 @@ export async function bootstrap(): Promise<void> {
         clearReplayData: () => { replayData = null; },
         onPlacementEnd: () => { stopPlacementMode = null; },
     };
+
+    const manipulationDeps: ManipulationDeps = {
+        dom,
+        files,
+        worldPositionFromClient,
+        renderPreview,
+        hitTestRotationHandle,
+        isPreviewMode,
+        getSelectedRobotFileName: () => selectedRobotFileName,
+        getSelectedRobotName: () => selectedRobotName,
+        updateSelectedRobotPanel: () => updateSelectedRobotPanel(),
+        pickRobotNameAtClient: (cx, cy) => pickRobotNameAtClient(cx, cy, currentRobotInfos()),
+    };
+    setupManipulation(manipulationDeps);
 
     dom.addBotBtn.addEventListener('click', async () => {
         stopPlacementMode?.();
@@ -234,7 +251,7 @@ export async function bootstrap(): Promise<void> {
         dom.robotPositionValue.textContent = `${robotInfo.x.toFixed(1)}, ${robotInfo.y.toFixed(1)}`;
         dom.robotStatusValue.textContent = robotInfo.alive
             ? `Alive - ${robotInfo.heading.toFixed(0)}deg`
-            : `Destroyed - ${robotInfo.heading.toFixed(0)}deg`;
+            : `Dead - ${robotInfo.heading.toFixed(0)}deg`;
         dom.robotInspector.classList.remove('hidden');
     }
 
