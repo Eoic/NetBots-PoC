@@ -1,0 +1,120 @@
+@use 'sass:map';
+@use '../theme/tokens' as t;
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+@mixin apply-theme($theme) {
+    --nb-color-primary: #{map.get($theme, primary)};
+    --nb-color-on-primary: #{map.get($theme, on-primary)};
+    --nb-color-primary-container: #{map.get($theme, primary-container)};
+    --nb-color-on-primary-container: #{map.get($theme, on-primary-container)};
+    --nb-color-secondary: #{map.get($theme, secondary)};
+    --nb-color-secondary-container: #{map.get($theme, secondary-container)};
+    --nb-color-on-secondary-container: #{map.get($theme, on-secondary-container)};
+    --nb-color-tertiary: #{map.get($theme, tertiary)};
+    --nb-color-error: #{map.get($theme, error)};
+    --nb-color-background: #{map.get($theme, background)};
+    --nb-color-on-background: #{map.get($theme, on-background)};
+    --nb-color-on-surface: #{map.get($theme, on-surface)};
+    --nb-color-on-surface-variant: #{map.get($theme, on-surface-variant)};
+    --nb-color-outline: #{map.get($theme, outline)};
+    --nb-color-outline-variant: #{map.get($theme, outline-variant)};
+    --nb-color-surface-variant: #{map.get($theme, surface-variant)};
+    --nb-color-surface-dim: #{map.get($theme, surface-dim)};
+    --nb-color-surface-low: #{map.get($theme, surface-low)};
+    --nb-color-surface-container: #{map.get($theme, surface-container)};
+    --nb-color-surface-high: #{map.get($theme, surface-high)};
+    --nb-color-surface-highest: #{map.get($theme, surface-highest)};
+    --nb-color-btn-hover: #{map.get($theme, btn-hover)};
+    --nb-color-tab-hover: #{map.get($theme, tab-hover)};
+    --nb-color-file-hover: #{map.get($theme, file-hover)};
+    --nb-color-disabled-bg: #{map.get($theme, disabled-bg)};
+    --nb-color-disabled-border: #{map.get($theme, disabled-border)};
+    --nb-color-disabled-fg: #{map.get($theme, disabled-fg)};
+    --nb-color-focus-ring: #{map.get($theme, focus-ring)};
+    --nb-pixi-bg: #{map.get($theme, pixi-bg)};
+    --nb-pixi-border: #{map.get($theme, pixi-border)};
+    --nb-pixi-grid: #{map.get($theme, pixi-grid)};
+    --nb-pixi-text: #{map.get($theme, pixi-text)};
+    --nb-pixi-hp-bg: #{map.get($theme, pixi-hp-bg)};
+    --nb-pixi-hp-warning: #{map.get($theme, pixi-hp-warning)};
+    --nb-pixi-hp-danger: #{map.get($theme, pixi-hp-danger)};
+    --nb-pixi-team-0: #{map.get($theme, pixi-team-0)};
+    --nb-pixi-enemy-1: #{map.get($theme, pixi-enemy-1)};
+    --nb-pixi-enemy-2: #{map.get($theme, pixi-enemy-2)};
+    --nb-pixi-enemy-3: #{map.get($theme, pixi-enemy-3)};
+    --nb-pixi-enemy-4: #{map.get($theme, pixi-enemy-4)};
+    --nb-pixi-enemy-5: #{map.get($theme, pixi-enemy-5)};
+    --nb-pixi-enemy-6: #{map.get($theme, pixi-enemy-6)};
+    --nb-scrollbar-track: #{map.get($theme, surface-low)};
+    --nb-scrollbar-thumb: #{map.get($theme, outline-variant)};
+    --nb-scrollbar-thumb-hover: #{map.get($theme, outline)};
+    --nb-scrollbar-corner: #{map.get($theme, surface-container)};
+}
+
+:root,
+:root[data-theme='terminal-amber'] {
+    @include apply-theme(t.$theme-terminal-amber);
+}
+
+:root[data-theme='terminal-neon'] {
+    @include apply-theme(t.$theme-terminal-neon);
+}
+
+:root[data-theme='one-dark'] {
+    @include apply-theme(t.$theme-one-dark);
+}
+
+body {
+    font-family: t.$font-family;
+    background-color: var(--nb-color-background);
+    color: var(--nb-color-on-background);
+    height: 100vh;
+    overflow: hidden;
+    line-height: 1.35;
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: 0.01em;
+}
+
+.app {
+    height: 100vh;
+    background: var(--nb-color-surface-dim);
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--nb-scrollbar-thumb) var(--nb-scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+    background: var(--nb-scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--nb-scrollbar-thumb);
+    border: 1px solid var(--nb-scrollbar-track);
+    border-radius: 0;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--nb-scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-corner {
+    background: var(--nb-scrollbar-corner);
+}

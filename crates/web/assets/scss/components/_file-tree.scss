@@ -1,0 +1,75 @@
+.file-tree {
+    flex: 0 0 140px;
+    background: var(--nb-color-surface-container);
+    border-right: 1px solid var(--nb-color-outline-variant);
+    overflow-y: auto;
+    padding: 0;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 0.52rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.77rem;
+    color: var(--nb-color-on-surface-variant);
+    gap: 0.25rem;
+    border: 0;
+    border-bottom: 1px solid var(--nb-color-outline-variant);
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.file-item:hover {
+    background: var(--nb-color-file-hover);
+}
+
+.file-item.active {
+    background: var(--nb-color-on-primary);
+    color: var(--nb-color-on-secondary-container);
+}
+
+.file-item:last-child {
+    border-bottom: 0;
+}
+
+.file-item .file-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-item .file-delete {
+    opacity: 0;
+    color: var(--nb-color-error);
+    cursor: pointer;
+    font-size: 0.95rem;
+    line-height: 1;
+    padding: 0 2px;
+    transition: opacity 120ms ease;
+}
+
+.file-item .file-delete i {
+    pointer-events: none;
+}
+
+.file-item:hover .file-delete {
+    opacity: 0.6;
+}
+
+.file-item .file-delete:hover {
+    opacity: 1;
+}
+
+.file-item .file-delete.disabled {
+    display: none;
+}
+
+.file-item:hover .file-delete.disabled {
+    display: none;
+}
+
+.file-team-0 .file-name { color: var(--nb-color-tertiary); }
+.file-team-0.active .file-name { color: var(--nb-color-on-secondary-container); }
+.file-team-1 .file-name { color: var(--nb-color-error); }
+.file-team-1.active .file-name { color: var(--nb-color-on-secondary-container); }

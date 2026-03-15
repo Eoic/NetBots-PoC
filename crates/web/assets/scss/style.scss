@@ -1,0 +1,12 @@
+@use 'base/global';
+@use 'layout/arena';
+@use 'layout/editor';
+@use 'layout/sidebar';
+@use 'components/file-tree';
+@use 'components/buttons';
+@use 'components/bot-controls';
+@use 'components/replay-controls';
+@use 'components/results';
+@use 'components/logs';
+@use 'components/robot-inspector';
+@use 'utilities/helpers';

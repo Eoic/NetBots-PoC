@@ -1,0 +1,54 @@
+.robot-inspector {
+    position: absolute;
+    top: 0.5rem;
+    right: 230px;
+    width: 220px;
+    z-index: 18;
+    display: flex;
+    flex-direction: column;
+    gap: 0.32rem;
+    padding: 0.5rem 0.55rem;
+    background: var(--nb-color-surface-container);
+    border: 1px solid var(--nb-color-outline-variant);
+}
+
+.robot-inspector-title {
+    font-size: 0.72rem;
+    color: var(--nb-color-on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+}
+
+.robot-inspector-field,
+.robot-inspector-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    color: var(--nb-color-on-surface-variant);
+}
+
+.robot-inspector-field input,
+.robot-inspector-field select {
+    min-width: 0;
+    flex: 1;
+    background: var(--nb-color-surface-low);
+    color: var(--nb-color-on-surface);
+    border: 1px solid var(--nb-color-outline);
+    padding: 0.3rem 0.42rem;
+    font-size: 0.72rem;
+}
+
+.robot-inspector-field input[type="color"] {
+    flex: 0 0 64px;
+    height: 1.7rem;
+    padding: 0.1rem;
+}
+
+.robot-inspector-row span:last-child {
+    color: var(--nb-color-on-surface);
+    font-weight: 600;
+    text-align: right;
+}

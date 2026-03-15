@@ -1,0 +1,48 @@
+.add-bot-row,
+.theme-row,
+.ticks-row {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.add-bot-row select,
+.theme-row select,
+.ticks-row input {
+    flex: 1;
+    background: var(--nb-color-surface-low);
+    color: var(--nb-color-on-surface);
+    border: 1px solid var(--nb-color-outline);
+    padding: 0.42rem 0.6rem;
+    font-size: 0.76rem;
+    transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.add-bot-row select:hover,
+.theme-row select:hover,
+.ticks-row input:hover {
+    border-color: var(--nb-color-primary);
+}
+
+.add-bot-row select:focus-visible,
+.theme-row select:focus-visible,
+.ticks-row input:focus-visible {
+    outline: 3px solid var(--nb-color-focus-ring);
+    outline-offset: 1px;
+}
+
+.ticks-row input {
+    width: 100%;
+}
+
+.add-bot-row button {
+    flex: 0 0 30px;
+    font-size: 0.95rem;
+    padding: 0.28rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.clear-sim-btn {
+    margin-top: 0.25rem;
+}

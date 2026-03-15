@@ -1,0 +1,60 @@
+.arena-panel {
+    width: 100%;
+    height: 100%;
+    background: var(--nb-color-surface-low);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--nb-color-outline-variant);
+}
+
+#arena {
+    width: 100%;
+    height: 100%;
+}
+
+.arena-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--nb-color-on-surface-variant);
+    font-size: 0.84rem;
+    letter-spacing: 0.01em;
+    pointer-events: none;
+    background: var(--nb-color-surface-high);
+    border: 1px solid var(--nb-color-outline-variant);
+    padding: 0.4rem 0.65rem;
+}
+
+.arena-overlay.hidden {
+    display: none;
+}
+
+.loading-cover {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--nb-color-surface-dim);
+    color: var(--nb-color-on-surface);
+}
+
+.loading-cover-label {
+    font-size: 0.82rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.loading-cover-page {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+}
+
+.loading-cover-scene {
+    position: absolute;
+    top: 0;
+    right: 220px;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+}

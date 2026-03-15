@@ -10,7 +10,11 @@ pub struct MatchResult {
     pub logs: Vec<(String, Vec<String>)>,
 }
 
-pub fn run_match(configs: &[RobotConfig], wasm_modules: &[Vec<u8>]) -> Result<MatchResult> {
+pub fn run_match(
+    configs: &[RobotConfig],
+    wasm_modules: &[Vec<u8>],
+    max_ticks: u32,
+) -> Result<MatchResult> {
     let mut runners: Vec<RobotRunner> = wasm_modules
         .iter()
         .enumerate()
@@ -19,11 +23,11 @@ pub fn run_match(configs: &[RobotConfig], wasm_modules: &[Vec<u8>]) -> Result<Ma
         })
         .collect::<Result<Vec<_>>>()?;
 
-    let mut world = GameWorld::new(configs);
+    let mut world = GameWorld::new_with_max_ticks(configs, max_ticks);
     let mut replay = Vec::new();
 
-    while world.status == GameStatus::Running && world.tick < MAX_TICKS {
-        let (tick_events, _) = run_events_phase(&mut world);
+    while world.status == GameStatus::Running && world.tick < world.max_ticks {
+        let (tick_events, phase1_events) = run_events_phase(&mut world);
 
         let mut all_actions: Vec<PlayerActions> =
             vec![PlayerActions::default(); world.robots.len()];
@@ -77,7 +81,11 @@ pub fn run_match(configs: &[RobotConfig], wasm_modules: &[Vec<u8>]) -> Result<Ma
             }
         }
 
-        let snapshot = run_tick(&mut world, &all_actions);
+        let mut snapshot = run_tick(&mut world, &all_actions);
+        // Prepend Phase 1 events (hits, collisions, deaths) before resolution events
+        let mut all_events = phase1_events;
+        all_events.append(&mut snapshot.events);
+        snapshot.events = all_events;
         replay.push(snapshot);
     }
 

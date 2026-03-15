@@ -267,7 +267,7 @@ pub fn check_win(world: &mut GameWorld) {
         world.status = GameStatus::Finished {
             winner_team: alive_teams.into_iter().next(),
         };
-    } else if world.tick >= MAX_TICKS {
+    } else if world.tick >= world.max_ticks {
         // Sum energy per team, highest total wins
         let mut team_energy: std::collections::HashMap<u8, f64> = std::collections::HashMap::new();
         for robot in world.robots.iter().filter(|r| r.alive) {
@@ -354,10 +354,12 @@ pub(crate) fn test_world_2v2() -> GameWorld {
         RobotConfig {
             name: "bot-0".to_string(),
             team: 0,
+            spawn: None,
         },
         RobotConfig {
             name: "bot-1".to_string(),
             team: 1,
+            spawn: None,
         },
     ])
 }

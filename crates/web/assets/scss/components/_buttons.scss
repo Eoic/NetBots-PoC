@@ -1,0 +1,62 @@
+button {
+    background: var(--nb-color-secondary-container);
+    color: var(--nb-color-on-secondary-container);
+    border: 1px solid var(--nb-color-secondary);
+    padding: 0.5rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+button:hover {
+    background: var(--nb-color-btn-hover);
+    // border-color: var(--nb-color-secondary);
+}
+
+button:disabled {
+    opacity: 0.58;
+    cursor: not-allowed;
+}
+
+button:disabled:hover {
+    background: var(--nb-color-secondary-container);
+    border-color: var(--nb-color-secondary);
+}
+
+button.primary {
+    background: var(--nb-color-primary);
+    color: var(--nb-color-on-primary);
+    border-color: var(--nb-color-primary);
+    font-size: 0.88rem;
+    min-height: 2.55rem;
+}
+
+button.primary:hover {
+    background: var(--nb-color-primary-container);
+    color: var(--nb-color-on-primary-container);
+    border-color: var(--nb-color-primary);
+}
+
+button.primary:disabled {
+    background: var(--nb-color-disabled-bg);
+    border-color: var(--nb-color-disabled-border);
+    color: var(--nb-color-disabled-fg);
+}
+
+.run-btn {
+    width: 100%;
+}
+
+.run-btn.loading {
+    background: var(--nb-color-surface-high);
+    color: var(--nb-color-on-surface-variant);
+    border-color: var(--nb-color-outline-variant);
+    cursor: wait;
+}
+
+button:focus-visible {
+    outline: 3px solid var(--nb-color-focus-ring);
+    outline-offset: 1px;
+}

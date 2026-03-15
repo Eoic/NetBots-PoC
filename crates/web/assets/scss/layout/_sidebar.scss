@@ -1,0 +1,43 @@
+.sidebar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 220px;
+    background: var(--nb-color-surface-high);
+    border-left: 1px solid var(--nb-color-outline-variant);
+    padding: 0.35rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+    z-index: 10;
+}
+
+.sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.5rem 0.55rem;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--nb-color-outline-variant);
+}
+
+.sidebar-section:last-child {
+    border-bottom: 0;
+}
+
+.sidebar-label {
+    font-size: 0.7rem;
+    color: var(--nb-color-on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+}
+
+.shortcut-hint {
+    font-size: 0.65rem;
+    color: var(--nb-color-on-surface-variant);
+    text-align: center;
+}

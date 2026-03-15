@@ -1,0 +1,46 @@
+#logs-container {
+    padding: 0;
+    white-space: normal;
+}
+
+.log-line {
+    display: block;
+    width: 100%;
+    padding: 0.46rem 0.75rem;
+    border-bottom: 1px solid var(--nb-color-outline-variant);
+    color: var(--nb-color-on-surface);
+    white-space: pre-wrap;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+
+.log-line:last-child {
+    border-bottom: 0;
+}
+
+.log-line:hover {
+    background: var(--nb-color-file-hover);
+}
+
+.log-line-tick {
+    cursor: pointer;
+}
+
+.log-line-tick:hover {
+    color: var(--nb-color-on-secondary-container);
+    background: var(--nb-color-secondary-container);
+}
+
+.log-line-active-tick {
+    font-weight: 700;
+}
+
+.log-robot-header {
+    color: var(--nb-color-primary);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+.log-error,
+.log-death {
+    color: var(--nb-color-error);
+}

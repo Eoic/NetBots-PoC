@@ -1,0 +1,55 @@
+.replay-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.replay-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.2rem;
+}
+
+.replay-buttons button {
+    flex: 1;
+    font-size: 0.95rem;
+    padding: 0.36rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.speed-buttons {
+    display: flex;
+    gap: 0.15rem;
+    padding: 0;
+    background: transparent;
+    border: 0;
+}
+
+.speed-btn {
+    flex: 1;
+    font-size: 0.62rem;
+    padding: 0.32rem 0.28rem;
+    border-color: transparent;
+}
+
+.speed-btn.active {
+    background: var(--nb-color-primary);
+    color: var(--nb-color-on-primary);
+    border-color: var(--nb-color-primary);
+}
+
+#tick-scrubber {
+    width: 100%;
+    accent-color: var(--nb-color-primary);
+    cursor: pointer;
+}
+
+.tick-display {
+    font-size: 0.7rem;
+    color: var(--nb-color-on-surface-variant);
+    text-align: center;
+    letter-spacing: 0.02em;
+}

@@ -84,10 +84,12 @@ fn test_full_simulation_with_wasm() {
         RobotConfig {
             name: "bot-0".to_string(),
             team: 0,
+            spawn: None,
         },
         RobotConfig {
             name: "bot-1".to_string(),
             team: 1,
+            spawn: None,
         },
     ]);
 

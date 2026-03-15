@@ -3,12 +3,23 @@ use std::time::Duration;
 use tokio::fs;
 use tokio::process::Command;
 
+/// Host function declarations prepended to every robot source before compilation.
+const PRELUDE: &str = r#"
+@external("env", "set_speed") declare function set_speed(speed: f64): void;
+@external("env", "rotate") declare function rotate(angle: f64): void;
+@external("env", "shoot") declare function shoot(power: f64): void;
+@external("env", "scan") declare function scan(): f64;
+@external("env", "log_i32") declare function log_i32(val: i32): void;
+@external("env", "log_f64") declare function log_f64(val: f64): void;
+"#;
+
 pub async fn compile(source: &str) -> Result<Vec<u8>> {
     let tmp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
     let source_path = tmp_dir.path().join("robot.ts");
     let output_path = tmp_dir.path().join("robot.wasm");
 
-    fs::write(&source_path, source)
+    let full_source = format!("{}{}", PRELUDE, source);
+    fs::write(&source_path, full_source)
         .await
         .context("Failed to write source file")?;
 

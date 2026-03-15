@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 // Game configuration constants
-pub const ARENA_WIDTH: f64 = 800.0;
-pub const ARENA_HEIGHT: f64 = 600.0;
+pub const ARENA_WIDTH: f64 = 1200.0;
+pub const ARENA_HEIGHT: f64 = 800.0;
 pub const ROBOT_RADIUS: f64 = 18.0;
 pub const STARTING_ENERGY: f64 = 100.0;
 pub const STARTING_GUN_HEAT: f64 = 1.0;
@@ -18,11 +18,20 @@ pub const SCAN_ARC_DEGREES: f64 = 10.0;
 pub struct RobotConfig {
     pub name: String,
     pub team: u8,
+    pub spawn: Option<SpawnPoint>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpawnPoint {
+    pub x: f64,
+    pub y: f64,
+    pub heading: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameWorld {
     pub tick: u32,
+    pub max_ticks: u32,
     pub arena_width: f64,
     pub arena_height: f64,
     pub robots: Vec<Robot>,
@@ -34,6 +43,10 @@ impl GameWorld {
     /// Create a new game world. Invariant: `robot.id == index in self.robots`.
     /// Collision structs store robot IDs which are used as direct vector indices.
     pub fn new(configs: &[RobotConfig]) -> Self {
+        Self::new_with_max_ticks(configs, MAX_TICKS)
+    }
+
+    pub fn new_with_max_ticks(configs: &[RobotConfig], max_ticks: u32) -> Self {
         let team0: Vec<usize> = configs
             .iter()
             .enumerate()
@@ -58,9 +71,13 @@ impl GameWorld {
                 id: config_i,
                 name: c.name.clone(),
                 team: c.team,
-                x: 100.0,
-                y: ARENA_HEIGHT * (idx as f64 + 1.0) / (team0_count as f64 + 1.0),
-                heading: 0.0,
+                x: c.spawn.as_ref().map(|spawn| spawn.x).unwrap_or(100.0),
+                y: c
+                    .spawn
+                    .as_ref()
+                    .map(|spawn| spawn.y)
+                    .unwrap_or(ARENA_HEIGHT * (idx as f64 + 1.0) / (team0_count as f64 + 1.0)),
+                heading: c.spawn.as_ref().map(|spawn| spawn.heading).unwrap_or(0.0),
                 speed: 0.0,
                 energy: STARTING_ENERGY,
                 gun_heat: STARTING_GUN_HEAT,
@@ -74,9 +91,13 @@ impl GameWorld {
                 id: config_i,
                 name: c.name.clone(),
                 team: c.team,
-                x: 550.0,
-                y: ARENA_HEIGHT * (idx as f64 + 1.0) / (team1_count as f64 + 1.0),
-                heading: 180.0,
+                x: c.spawn.as_ref().map(|spawn| spawn.x).unwrap_or(550.0),
+                y: c
+                    .spawn
+                    .as_ref()
+                    .map(|spawn| spawn.y)
+                    .unwrap_or(ARENA_HEIGHT * (idx as f64 + 1.0) / (team1_count as f64 + 1.0)),
+                heading: c.spawn.as_ref().map(|spawn| spawn.heading).unwrap_or(180.0),
                 speed: 0.0,
                 energy: STARTING_ENERGY,
                 gun_heat: STARTING_GUN_HEAT,
@@ -86,6 +107,7 @@ impl GameWorld {
 
         Self {
             tick: 0,
+            max_ticks: max_ticks.max(1),
             arena_width: ARENA_WIDTH,
             arena_height: ARENA_HEIGHT,
             robots: robots.into_iter().map(|r| r.unwrap()).collect(),

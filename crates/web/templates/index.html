@@ -4,7 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NetBots</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <script>
+        (() => {
+            try {
+                const stored = localStorage.getItem('netbots-theme');
+                if (stored === 'terminal-amber' || stored === 'terminal-neon' || stored === 'one-dark') {
+                    document.documentElement.dataset.theme = stored;
+                }
+            } catch {
+                // Ignore localStorage access issues during preload.
+            }
+        })();
+    </script>
+    <link rel="stylesheet" href="/static/dist/style.css">
     <script type="importmap">
     {
         "imports": {
@@ -12,84 +24,134 @@
         }
     }
     </script>
+    <script src="https://kit.fontawesome.com/ad3b985a78.js" crossorigin="anonymous"></script>
 </head>
 <body>
+    <div
+        id="page-loading-cover"
+        class="loading-cover loading-cover-page"
+        style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:var(--nb-color-surface-dim,#17130b);color:var(--nb-color-on-surface,#ece1d4);font-family:'DM Mono',ui-monospace,monospace;"
+    >
+        <span class="loading-cover-label">Loading...</span>
+    </div>
     <div class="app">
-        <!-- Left column: arena + editor -->
-        <div class="left-column">
-            <!-- Arena -->
-            <div class="arena-panel" id="arena-panel">
-                <div id="arena"></div>
-                <div id="arena-overlay" class="arena-overlay">Press Run to start</div>
+        <div class="arena-panel" id="arena-panel">
+            <div id="arena"></div>
+            <div id="arena-overlay" class="arena-overlay">Press Run to start</div>
+            <div id="scene-loading-cover" class="loading-cover loading-cover-scene hidden">
+                <span class="loading-cover-label">Running Simulation...</span>
             </div>
-
-            <!-- Resize handle -->
-            <div class="resize-handle" id="resize-handle"></div>
-
-            <!-- Editor panel -->
-            <div class="editor-panel" id="editor-panel">
-                <!-- Tab bar -->
-                <div class="tab-bar">
-                    <button class="tab active" data-tab="code">Code</button>
-                    <button class="tab" data-tab="logs">Logs</button>
-                </div>
-                <div class="editor-body">
-                    <!-- File tree -->
-                    <div class="file-tree" id="file-tree"></div>
-                    <!-- Code editor -->
-                    <div class="editor-content" id="editor-content">
-                        <div id="codemirror-container"></div>
-                        <pre id="logs-container" class="hidden"></pre>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right sidebar: controls -->
-        <div class="sidebar">
-            <div class="sidebar-section">
-                <button id="btn-run" class="primary run-btn">Run</button>
-                <div class="shortcut-hint">Ctrl+Enter</div>
-            </div>
-
-            <div class="sidebar-section">
-                <label class="sidebar-label">Add Bot</label>
-                <div class="add-bot-row">
-                    <select id="template-select">
-                        <option value="sitter">Sitter</option>
-                        <option value="spinner">Spinner</option>
-                        <option value="chaser" selected>Chaser</option>
-                        <option value="wall-hugger">Wall Hugger</option>
+            <div id="robot-inspector" class="robot-inspector hidden">
+                <div class="robot-inspector-title">Robot</div>
+                <label class="robot-inspector-field">
+                    <span>Name</span>
+                    <input id="robot-name-input" type="text" maxlength="32" autocomplete="off">
+                </label>
+                <label class="robot-inspector-field">
+                    <span>Team</span>
+                    <select id="robot-team-select">
+                        <option value="0">Team 0</option>
+                        <option value="1">Team 1</option>
                     </select>
-                    <button id="btn-add-bot">+</button>
+                </label>
+                <label class="robot-inspector-field">
+                    <span>Color</span>
+                    <input id="robot-color-input" type="color" value="#61afef">
+                </label>
+                <div class="robot-inspector-row">
+                    <span>Position</span>
+                    <span id="robot-position-value">-</span>
+                </div>
+                <div class="robot-inspector-row">
+                    <span>Status</span>
+                    <span id="robot-status-value">-</span>
                 </div>
             </div>
 
-            <div class="sidebar-section">
-                <label class="sidebar-label">Replay</label>
-                <div class="replay-controls">
-                    <div class="replay-buttons">
-                        <button id="btn-restart" disabled title="Restart">&#8634;</button>
-                        <button id="btn-play-pause" disabled title="Play/Pause">&#9654;</button>
+            <div class="editor-overlay" id="editor-overlay">
+                <div class="resize-handle" id="resize-handle"></div>
+                <div class="editor-panel" id="editor-panel">
+                    <div class="tab-bar">
+                        <button class="tab active" data-tab="code">Code</button>
+                        <button class="tab" data-tab="logs">Logs</button>
                     </div>
-                    <div class="speed-buttons">
-                        <button class="speed-btn" data-speed="0.5">0.5x</button>
-                        <button class="speed-btn active" data-speed="1">1x</button>
-                        <button class="speed-btn" data-speed="2">2x</button>
-                        <button class="speed-btn" data-speed="4">4x</button>
+                    <div class="editor-body">
+                        <div class="file-tree" id="file-tree"></div>
+                        <div class="editor-content" id="editor-content">
+                            <div id="codemirror-container"></div>
+                            <pre id="logs-container" class="hidden"></pre>
+                        </div>
                     </div>
-                    <input type="range" id="tick-scrubber" min="0" max="0" value="0" disabled>
-                    <div id="tick-display" class="tick-display">0 / 0</div>
                 </div>
             </div>
 
-            <div class="sidebar-section results" id="results-section" style="display:none;">
-                <label class="sidebar-label">Result</label>
-                <div id="result-text"></div>
+            <div class="sidebar">
+                <div class="sidebar-section">
+                    <button id="btn-run" class="primary run-btn">Run</button>
+                    <label class="sidebar-label" for="simulation-ticks">Ticks</label>
+                    <div class="ticks-row">
+                        <input id="simulation-ticks" type="number" min="1" step="1" value="1000">
+                    </div>
+                    <button id="btn-clear-sim" class="run-btn clear-sim-btn" disabled>Clear simulation</button>
+                </div>
+
+                <div class="sidebar-section">
+                    <label class="sidebar-label" for="theme-select">Theme</label>
+                    <div class="theme-row">
+                        <select id="theme-select">
+                            <option value="terminal-amber" selected>Amber Terminal</option>
+                            <option value="terminal-neon">Neon Matrix</option>
+                            <option value="one-dark">One Dark</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <label class="sidebar-label">Add Bot</label>
+                    <div class="add-bot-row">
+                        <select id="template-select">
+                            <option value="sitter">Sitter</option>
+                            <option value="spinner">Spinner</option>
+                            <option value="chaser" selected>Chaser</option>
+                            <option value="wall-hugger">Wall Hugger</option>
+                        </select>
+                        <button id="btn-add-bot" title="Add bot" aria-label="Add bot">
+                            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <label class="sidebar-label">Replay</label>
+                    <div class="replay-controls">
+                        <div class="replay-buttons">
+                            <button id="btn-restart" disabled title="Restart" aria-label="Restart replay">
+                                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                            </button>
+                            <button id="btn-step-back" disabled title="Step backward" aria-label="Step backward">
+                                <i class="fa-solid fa-backward-step" aria-hidden="true"></i>
+                            </button>
+                            <button id="btn-play-pause" disabled title="Play/Pause" aria-label="Play replay">
+                                <i class="fa-solid fa-play" aria-hidden="true"></i>
+                            </button>
+                            <button id="btn-step-forward" disabled title="Step forward" aria-label="Step forward">
+                                <i class="fa-solid fa-forward-step" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="speed-buttons">
+                            <button class="speed-btn" data-speed="0.5">0.5x</button>
+                            <button class="speed-btn active" data-speed="1">1x</button>
+                            <button class="speed-btn" data-speed="2">2x</button>
+                            <button class="speed-btn" data-speed="4">4x</button>
+                        </div>
+                        <input type="range" id="tick-scrubber" min="0" max="0" value="0" disabled>
+                        <div id="tick-display" class="tick-display">0 / 0</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <script type="module" src="/static/js/app.js"></script>
+    <script type="module" src="/static/dist/main.js"></script>
 </body>
 </html>

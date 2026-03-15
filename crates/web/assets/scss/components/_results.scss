@@ -1,0 +1,13 @@
+.results {
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--nb-color-outline-variant);
+}
+
+#result-text {
+    font-size: 0.82rem;
+    color: var(--nb-color-on-surface);
+}
+
+.result-win { color: var(--nb-color-tertiary); }
+.result-lose { color: var(--nb-color-error); }
+.result-draw { color: var(--nb-color-primary); }
