@@ -57,8 +57,7 @@ pub fn run_match(
                 }
 
                 if runners[hit.robot_id].has_trapped() {
-                    world.robots[hit.robot_id].alive = false;
-                    world.robots[hit.robot_id].energy = 0.0;
+                    kill_robot(&mut world.robots[hit.robot_id]);
                 }
             }
         }
@@ -70,8 +69,7 @@ pub fn run_match(
                     all_actions[col.robot_id].actions.extend(actions);
                 }
                 if runners[col.robot_id].has_trapped() {
-                    world.robots[col.robot_id].alive = false;
-                    world.robots[col.robot_id].energy = 0.0;
+                    kill_robot(&mut world.robots[col.robot_id]);
                 }
             }
         }
@@ -98,8 +96,7 @@ pub fn run_match(
             }
 
             if runners[i].has_trapped() {
-                world.robots[i].alive = false;
-                world.robots[i].energy = 0.0;
+                kill_robot(&mut world.robots[i]);
             }
         }
 
@@ -127,4 +124,9 @@ pub fn run_match(
         total_ticks: world.tick,
         logs,
     })
+}
+
+fn kill_robot(robot: &mut Robot) {
+    robot.alive = false;
+    robot.energy = 0.0;
 }
