@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use engine::scan::*;
 use engine::tick::*;
 use engine::world::*;
 use wasm_runner::RobotRunner;
@@ -15,6 +16,23 @@ pub fn run_match(
     wasm_modules: &[Vec<u8>],
     max_ticks: u32,
 ) -> Result<MatchResult> {
+    if configs.len() != wasm_modules.len() {
+        anyhow::bail!(
+            "Mismatch between robot configs ({}) and wasm modules ({})",
+            configs.len(),
+            wasm_modules.len()
+        );
+    }
+
+    if let Some(invalid) = configs.iter().find(|cfg| cfg.team >= MAX_TEAMS) {
+        anyhow::bail!(
+            "Robot '{}' has invalid team id {} (must be 0..{})",
+            invalid.name,
+            invalid.team,
+            MAX_TEAMS - 1
+        );
+    }
+
     let mut runners: Vec<RobotRunner> = wasm_modules
         .iter()
         .enumerate()
@@ -27,7 +45,7 @@ pub fn run_match(
     let mut replay = Vec::new();
 
     while world.status == GameStatus::Running && world.tick < world.max_ticks {
-        let (tick_events, phase1_events) = run_events_phase(&mut world);
+        let (tick_events, phase_events) = run_events_phase(&mut world);
 
         let mut all_actions: Vec<PlayerActions> =
             vec![PlayerActions::default(); world.robots.len()];
@@ -37,6 +55,7 @@ pub fn run_match(
                 if let Ok(actions) = runners[hit.robot_id].call_on_hit(hit.damage) {
                     all_actions[hit.robot_id].actions.extend(actions);
                 }
+
                 if runners[hit.robot_id].has_trapped() {
                     world.robots[hit.robot_id].alive = false;
                     world.robots[hit.robot_id].energy = 0.0;
@@ -61,8 +80,10 @@ pub fn run_match(
             if !world.robots[i].alive || i >= runners.len() {
                 continue;
             }
+
             let scan = compute_scan(&world, i);
             let robot = &world.robots[i];
+
             if let Ok(actions) = runners[i].call_on_tick(
                 world.tick + 1,
                 robot.energy,
@@ -75,6 +96,7 @@ pub fn run_match(
             ) {
                 all_actions[i].actions.extend(actions);
             }
+
             if runners[i].has_trapped() {
                 world.robots[i].alive = false;
                 world.robots[i].energy = 0.0;
@@ -82,8 +104,7 @@ pub fn run_match(
         }
 
         let mut snapshot = run_tick(&mut world, &all_actions);
-        // Prepend Phase 1 events (hits, collisions, deaths) before resolution events
-        let mut all_events = phase1_events;
+        let mut all_events = phase_events;
         all_events.append(&mut snapshot.events);
         snapshot.events = all_events;
         replay.push(snapshot);
