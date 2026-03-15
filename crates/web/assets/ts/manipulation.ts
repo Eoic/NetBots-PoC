@@ -15,10 +15,11 @@ export interface ManipulationDeps {
     pickRobotNameAtClient: (cx: number, cy: number) => string | null;
 }
 
-export function setupManipulation(deps: ManipulationDeps): { teardown: () => void } {
+export function setupManipulation(deps: ManipulationDeps): { teardown: () => void; consumeDrag: () => boolean } {
     const { dom, files } = deps;
     let dragMode: 'move' | 'rotate' | null = null;
     let dragRobotFileName: string | null = null;
+    let dragMoved = false;
 
     function onMouseDown(event: MouseEvent): void {
         if (event.button !== 0 || !deps.isPreviewMode()) return;
@@ -30,6 +31,7 @@ export function setupManipulation(deps: ManipulationDeps): { teardown: () => voi
         if (deps.hitTestRotationHandle(event.clientX, event.clientY)) {
             dragMode = 'rotate';
             dragRobotFileName = fileName;
+            dragMoved = false;
             event.preventDefault();
             return;
         }
@@ -38,6 +40,7 @@ export function setupManipulation(deps: ManipulationDeps): { teardown: () => voi
         if (picked === robotName) {
             dragMode = 'move';
             dragRobotFileName = fileName;
+            dragMoved = false;
             event.preventDefault();
         }
     }
@@ -49,6 +52,7 @@ export function setupManipulation(deps: ManipulationDeps): { teardown: () => voi
         if (!worldPos) return;
 
         event.preventDefault();
+        dragMoved = true;
 
         if (dragMode === 'move') {
             files.setPlacement(dragRobotFileName, {
@@ -90,6 +94,13 @@ export function setupManipulation(deps: ManipulationDeps): { teardown: () => voi
     document.addEventListener('mouseup', onMouseUp);
 
     return {
+        consumeDrag(): boolean {
+            if (dragMoved) {
+                dragMoved = false;
+                return true;
+            }
+            return false;
+        },
         teardown(): void {
             dom.arenaContainer.removeEventListener('mousedown', onMouseDown);
             document.removeEventListener('mousemove', onMouseMove);

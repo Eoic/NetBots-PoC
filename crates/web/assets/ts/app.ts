@@ -127,7 +127,7 @@ export async function bootstrap(): Promise<void> {
         updateSelectedRobotPanel: () => updateSelectedRobotPanel(),
         pickRobotNameAtClient: (cx, cy) => pickRobotNameAtClient(cx, cy, currentRobotInfos()),
     };
-    setupManipulation(manipulationDeps);
+    const manipulation = setupManipulation(manipulationDeps);
 
     dom.addBotBtn.addEventListener('click', async () => {
         stopPlacementMode?.();
@@ -256,7 +256,7 @@ export async function bootstrap(): Promise<void> {
     }
 
     function handleArenaClick(event: MouseEvent): void {
-        if (stopPlacementMode) {
+        if (stopPlacementMode || manipulation.consumeDrag()) {
             return;
         }
 
