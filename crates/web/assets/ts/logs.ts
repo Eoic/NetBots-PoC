@@ -32,21 +32,25 @@ export class LogPanel {
     ) {
         this.logsContainer.addEventListener('click', (event) => {
             const target = event.target;
+
             if (!(target instanceof Element)) {
                 return;
             }
 
             const line = target.closest<HTMLElement>('.log-line[data-tick-index]');
+
             if (!line) {
                 return;
             }
 
             const rawIndex = line.dataset.tickIndex;
+
             if (!rawIndex) {
                 return;
             }
 
             const tickIndex = Number.parseInt(rawIndex, 10);
+
             if (!Number.isNaN(tickIndex)) {
                 this.options.onTickSelected(tickIndex);
             }
@@ -95,6 +99,7 @@ export class LogPanel {
             if (log.messages.length === 0) {
                 return;
             }
+
             this.append(`[${log.robot}]`, 'log-robot-header');
             log.messages.forEach((msg) => this.append(`  ${msg}`));
         });
@@ -114,9 +119,11 @@ export class LogPanel {
                 tickData.events,
                 replayData.robotInfos,
             );
+
             if (entries.length === 0) {
                 return;
             }
+
             this.tickEntries.set(tickIndex, entries);
             this.tickIndices.push(tickIndex);
         });
@@ -132,6 +139,7 @@ export class LogPanel {
     ): void {
         if (!this.tickEntries.has(tickIndex)) {
             const entries = this.buildTickEntries(tick, tickIndex, events, robotInfos);
+
             if (entries.length > 0) {
                 this.tickEntries.set(tickIndex, entries);
                 this.tickIndices.push(tickIndex);
@@ -144,8 +152,9 @@ export class LogPanel {
     }
 
     logMatchResult(replayData: ReplayData): void {
-        const { winnerTeam, totalTicks } = replayData;
-        if (winnerTeam === 0) {
+        const { winnerTeam, totalTicks, playerTeam } = replayData;
+
+        if (winnerTeam != null && playerTeam != null && winnerTeam === playerTeam) {
             this.matchResultEntry = { text: `--- You win! (${totalTicks} ticks) ---`, className: 'log-result-win' };
         } else if (winnerTeam != null) {
             this.matchResultEntry = { text: `--- You lose. (${totalTicks} ticks) ---`, className: 'log-result-lose' };
@@ -168,6 +177,7 @@ export class LogPanel {
         }
 
         const entries: LogEntry[] = [];
+
         for (const evt of events) {
             if (evt.Hit) {
                 const name = robotInfos[evt.Hit.robot_id]?.name || `robot-${evt.Hit.robot_id}`;
@@ -199,16 +209,20 @@ export class LogPanel {
     private createLine(entry: LogEntry, isActiveTick: boolean): HTMLDivElement {
         const div = document.createElement('div');
         div.classList.add('log-line');
+
         if (entry.className) {
             div.classList.add(entry.className);
         }
+
         if (typeof entry.tickIndex === 'number' && entry.tickIndex >= 0) {
             div.dataset.tickIndex = String(entry.tickIndex);
             div.classList.add('log-line-tick');
         }
+
         if (isActiveTick) {
             div.classList.add('log-line-active-tick');
         }
+
         div.textContent = entry.text;
         return div;
     }
@@ -224,10 +238,13 @@ export class LogPanel {
             if (tickIndex > this.currentTickIndex) {
                 break;
             }
+
             const entries = this.tickEntries.get(tickIndex);
+
             if (!entries) {
                 continue;
             }
+
             for (const entry of entries) {
                 const isActiveTick = tickIndex === this.currentTickIndex;
                 this.logsContainer.appendChild(this.createLine(entry, isActiveTick));

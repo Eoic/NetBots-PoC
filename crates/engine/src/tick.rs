@@ -428,10 +428,7 @@ mod tests {
         let mut world = test_world_2v2();
         let actions = vec![
             PlayerActions {
-                actions: vec![
-                    RobotAction::SetSpeed(3.0),
-                    RobotAction::SetSpeed(7.0),
-                ],
+                actions: vec![RobotAction::SetSpeed(3.0), RobotAction::SetSpeed(7.0)],
             },
             PlayerActions::default(),
         ];
@@ -557,6 +554,7 @@ mod tests {
     #[test]
     fn test_bullet_moves() {
         let mut world = test_world_2v2();
+
         world.bullets.push(Bullet {
             owner_id: 0,
             owner_team: 0,
@@ -574,6 +572,7 @@ mod tests {
     #[test]
     fn test_bullet_removed_out_of_bounds() {
         let mut world = test_world_2v2();
+
         world.bullets.push(Bullet {
             owner_id: 0,
             owner_team: 0,

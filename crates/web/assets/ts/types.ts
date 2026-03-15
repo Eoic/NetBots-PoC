@@ -5,6 +5,7 @@ export interface ReplayData {
     robotInfos: RobotInfo[];
     arenaWidth: number;
     arenaHeight: number;
+    playerTeam: number | null;
     winnerTeam: number | null;
     totalTicks: number;
 }

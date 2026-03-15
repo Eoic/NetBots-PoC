@@ -567,6 +567,14 @@ export function isPreviewMode(): boolean {
     return previewModeActive;
 }
 
+export function pauseViewportDrag(): void {
+    viewport?.plugins.pause('drag');
+}
+
+export function resumeViewportDrag(): void {
+    viewport?.plugins.resume('drag');
+}
+
 export function destroy(): void {
     if (!app) return;
     app.destroy(true);

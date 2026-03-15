@@ -11,7 +11,6 @@ export interface RobotPlacement {
 interface RobotMeta {
     name: string;
     team: number;
-    color?: string;
 }
 
 export interface EditableRobotMeta extends RobotMeta {
@@ -26,6 +25,15 @@ interface FileStoreOptions {
     canDeleteEnemyBots: () => boolean;
 }
 
+const MAX_TEAMS = 16;
+const DEFAULT_ARENA_WIDTH = 1200;
+const DEFAULT_ARENA_HEIGHT = 800;
+const ROBOT_RADIUS = 18;
+const DEFAULT_HEADING = 0;
+const DEFAULT_PLACEMENT_COLS = 4;
+const DEFAULT_PLACEMENT_STEP_X = 120;
+const DEFAULT_PLACEMENT_STEP_Y = 100;
+
 export class FileStore {
     private readonly files = new Map<string, string>();
     private readonly placements = new Map<string, RobotPlacement>();
@@ -37,6 +45,7 @@ export class FileStore {
     setFile(name: string, source: string): void {
         this.files.set(name, source);
         this.getOrCreateMeta(name);
+        this.ensurePlacement(name);
     }
 
     setPlacement(name: string, placement: RobotPlacement): void {
@@ -47,23 +56,16 @@ export class FileStore {
     }
 
     getPreviewPlacements(): Record<string, RobotPlacement> {
+        for (const [name] of this.files) {
+            this.ensurePlacement(name);
+        }
+
         const placements: Record<string, RobotPlacement> = {};
         for (const [name, placement] of this.placements) {
             const meta = this.getOrCreateMeta(name);
             placements[meta.name] = placement;
         }
         return placements;
-    }
-
-    getColorOverrides(): Record<string, string> {
-        const overrides: Record<string, string> = {};
-        for (const [fileName, meta] of this.robotMeta) {
-            if (!this.files.has(fileName) || !meta.color) {
-                continue;
-            }
-            overrides[meta.name] = meta.color;
-        }
-        return overrides;
     }
 
     findFileByRobotName(robotName: string): string | null {
@@ -88,13 +90,12 @@ export class FileStore {
             isPlayer: this.isPlayerFile(fileName),
             name: meta.name,
             team: meta.team,
-            color: meta.color,
         };
     }
 
     updateRobotMeta(
         fileName: string,
-        updates: { name?: string; team?: number; color?: string | null },
+        updates: { name?: string; team?: number },
     ): EditableRobotMeta | null {
         if (!this.files.has(fileName)) {
             return null;
@@ -106,17 +107,11 @@ export class FileStore {
             : this.getUniqueRobotName(fileName, updates.name.trim() || current.name);
         const nextTeam = updates.team === undefined
             ? current.team
-            : updates.team === 0
-                ? 0
-                : 1;
-        const nextColor = updates.color === undefined
-            ? current.color
-            : this.normalizeColor(updates.color);
+            : Math.max(0, Math.min(MAX_TEAMS - 1, updates.team));
 
         this.robotMeta.set(fileName, {
             name: nextName,
             team: nextTeam,
-            color: nextColor,
         });
         this.renderFileTree();
         return this.getRobotMeta(fileName);
@@ -143,6 +138,7 @@ export class FileStore {
             const isPlayer = name === 'my-bot.ts';
             const team = this.getOrCreateMeta(name).team;
             div.className = `file-item file-team-${team}${name === this.activeFile ? ' active' : ''}`;
+            div.style.setProperty('--file-team-color', `var(--nb-pixi-team-${team})`);
 
             const nameSpan = document.createElement('span');
             nameSpan.className = 'file-name';
@@ -187,6 +183,7 @@ export class FileStore {
     toRobotPayloads(): RobotPayload[] {
         this.saveCurrentFile();
         const robots: RobotPayload[] = [];
+
         for (const [name, source] of this.files) {
             const meta = this.getOrCreateMeta(name);
             robots.push({
@@ -196,6 +193,7 @@ export class FileStore {
                 spawn: this.placements.get(name),
             });
         }
+
         return robots;
     }
 
@@ -239,6 +237,25 @@ export class FileStore {
         return created;
     }
 
+    private ensurePlacement(fileName: string): void {
+        if (!this.files.has(fileName) || this.placements.has(fileName)) {
+            return;
+        }
+        this.placements.set(fileName, this.createDefaultPlacement(this.placements.size));
+    }
+
+    private createDefaultPlacement(index: number): RobotPlacement {
+        const col = index % DEFAULT_PLACEMENT_COLS;
+        const row = Math.floor(index / DEFAULT_PLACEMENT_COLS);
+        const baseX = ROBOT_RADIUS + 40 + (col * DEFAULT_PLACEMENT_STEP_X);
+        const baseY = ROBOT_RADIUS + 40 + (row * DEFAULT_PLACEMENT_STEP_Y);
+        return {
+            x: Math.max(ROBOT_RADIUS, Math.min(DEFAULT_ARENA_WIDTH - ROBOT_RADIUS, baseX)),
+            y: Math.max(ROBOT_RADIUS, Math.min(DEFAULT_ARENA_HEIGHT - ROBOT_RADIUS, baseY)),
+            heading: DEFAULT_HEADING,
+        };
+    }
+
     private getUniqueRobotName(fileName: string, preferredName: string): string {
         const base = preferredName.trim() || fileName.replace('.ts', '');
         const taken = new Set(
@@ -257,14 +274,4 @@ export class FileStore {
         return `${base}-${suffix}`;
     }
 
-    private normalizeColor(color: string | null): string | undefined {
-        if (!color) {
-            return undefined;
-        }
-        const value = color.trim();
-        if (/^#[0-9a-fA-F]{6}$/.test(value)) {
-            return value.toLowerCase();
-        }
-        return undefined;
-    }
 }

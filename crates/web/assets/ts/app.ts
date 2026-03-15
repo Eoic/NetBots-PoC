@@ -13,10 +13,12 @@ import {
     hitTestRotationHandle,
     initArena,
     isPreviewMode,
+    pauseViewportDrag,
     pickRobotNameAtClient,
     refreshSelectedRobotMarker,
     renderPreview,
     renderTick,
+    resumeViewportDrag,
     setSelectedRobot,
     worldPositionFromClient,
 } from './renderer';
@@ -126,6 +128,8 @@ export async function bootstrap(): Promise<void> {
         getSelectedRobotName: () => selectedRobotName,
         updateSelectedRobotPanel: () => updateSelectedRobotPanel(),
         pickRobotNameAtClient: (cx, cy) => pickRobotNameAtClient(cx, cy, currentRobotInfos()),
+        pauseViewportDrag,
+        resumeViewportDrag,
     };
     const manipulation = setupManipulation(manipulationDeps);
 

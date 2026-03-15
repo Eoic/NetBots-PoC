@@ -37,6 +37,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--file-team-color, var(--nb-color-on-surface-variant));
 }
 
 .file-item .file-delete {
@@ -69,7 +70,6 @@
     display: none;
 }
 
-.file-team-0 .file-name { color: var(--nb-color-tertiary); }
-.file-team-0.active .file-name { color: var(--nb-color-on-secondary-container); }
-.file-team-1 .file-name { color: var(--nb-color-error); }
-.file-team-1.active .file-name { color: var(--nb-color-on-secondary-container); }
+.file-item.active .file-name {
+    color: var(--nb-color-on-secondary-container);
+}

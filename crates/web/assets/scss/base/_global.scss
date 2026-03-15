@@ -50,12 +50,21 @@ body {
     --nb-pixi-hp-warning: #{map.get($theme, pixi-hp-warning)};
     --nb-pixi-hp-danger: #{map.get($theme, pixi-hp-danger)};
     --nb-pixi-team-0: #{map.get($theme, pixi-team-0)};
-    --nb-pixi-enemy-1: #{map.get($theme, pixi-enemy-1)};
-    --nb-pixi-enemy-2: #{map.get($theme, pixi-enemy-2)};
-    --nb-pixi-enemy-3: #{map.get($theme, pixi-enemy-3)};
-    --nb-pixi-enemy-4: #{map.get($theme, pixi-enemy-4)};
-    --nb-pixi-enemy-5: #{map.get($theme, pixi-enemy-5)};
-    --nb-pixi-enemy-6: #{map.get($theme, pixi-enemy-6)};
+    --nb-pixi-team-1: #{map.get($theme, pixi-team-1)};
+    --nb-pixi-team-2: #{map.get($theme, pixi-team-2)};
+    --nb-pixi-team-3: #{map.get($theme, pixi-team-3)};
+    --nb-pixi-team-4: #{map.get($theme, pixi-team-4)};
+    --nb-pixi-team-5: #{map.get($theme, pixi-team-5)};
+    --nb-pixi-team-6: #{map.get($theme, pixi-team-6)};
+    --nb-pixi-team-7: #{map.get($theme, pixi-team-7)};
+    --nb-pixi-team-8: #{map.get($theme, pixi-team-8)};
+    --nb-pixi-team-9: #{map.get($theme, pixi-team-9)};
+    --nb-pixi-team-10: #{map.get($theme, pixi-team-10)};
+    --nb-pixi-team-11: #{map.get($theme, pixi-team-11)};
+    --nb-pixi-team-12: #{map.get($theme, pixi-team-12)};
+    --nb-pixi-team-13: #{map.get($theme, pixi-team-13)};
+    --nb-pixi-team-14: #{map.get($theme, pixi-team-14)};
+    --nb-pixi-team-15: #{map.get($theme, pixi-team-15)};
     --nb-scrollbar-track: #{map.get($theme, surface-low)};
     --nb-scrollbar-thumb: #{map.get($theme, outline-variant)};
     --nb-scrollbar-thumb-hover: #{map.get($theme, outline)};
@@ -63,16 +72,16 @@ body {
 }
 
 :root,
+:root[data-theme='one-dark'] {
+    @include apply-theme(t.$theme-one-dark);
+}
+
 :root[data-theme='terminal-amber'] {
     @include apply-theme(t.$theme-terminal-amber);
 }
 
 :root[data-theme='terminal-neon'] {
     @include apply-theme(t.$theme-terminal-neon);
-}
-
-:root[data-theme='one-dark'] {
-    @include apply-theme(t.$theme-one-dark);
 }
 
 body {

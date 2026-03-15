@@ -13,6 +13,8 @@ export interface ManipulationDeps {
     getSelectedRobotName: () => string | null;
     updateSelectedRobotPanel: () => void;
     pickRobotNameAtClient: (cx: number, cy: number) => string | null;
+    pauseViewportDrag: () => void;
+    resumeViewportDrag: () => void;
 }
 
 export function setupManipulation(deps: ManipulationDeps): { teardown: () => void; consumeDrag: () => boolean } {
@@ -33,6 +35,8 @@ export function setupManipulation(deps: ManipulationDeps): { teardown: () => voi
             dragRobotFileName = fileName;
             dragMoved = false;
             event.preventDefault();
+            event.stopPropagation();
+            deps.pauseViewportDrag();
             return;
         }
 
@@ -42,6 +46,8 @@ export function setupManipulation(deps: ManipulationDeps): { teardown: () => voi
             dragRobotFileName = fileName;
             dragMoved = false;
             event.preventDefault();
+            event.stopPropagation();
+            deps.pauseViewportDrag();
         }
     }
 
@@ -87,6 +93,7 @@ export function setupManipulation(deps: ManipulationDeps): { teardown: () => voi
         if (!dragMode) return;
         dragMode = null;
         dragRobotFileName = null;
+        deps.resumeViewportDrag();
     }
 
     dom.arenaContainer.addEventListener('mousedown', onMouseDown);

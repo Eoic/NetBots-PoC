@@ -1,21 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="one-dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NetBots</title>
-    <script>
-        (() => {
-            try {
-                const stored = localStorage.getItem('netbots-theme');
-                if (stored === 'terminal-amber' || stored === 'terminal-neon' || stored === 'one-dark') {
-                    document.documentElement.dataset.theme = stored;
-                }
-            } catch {
-                // Ignore localStorage access issues during preload.
-            }
-        })();
-    </script>
     <link rel="stylesheet" href="/static/dist/style.css">
     <script type="importmap">
     {
@@ -52,11 +40,21 @@
                     <select id="robot-team-select">
                         <option value="0">Team 0</option>
                         <option value="1">Team 1</option>
+                        <option value="2">Team 2</option>
+                        <option value="3">Team 3</option>
+                        <option value="4">Team 4</option>
+                        <option value="5">Team 5</option>
+                        <option value="6">Team 6</option>
+                        <option value="7">Team 7</option>
+                        <option value="8">Team 8</option>
+                        <option value="9">Team 9</option>
+                        <option value="10">Team 10</option>
+                        <option value="11">Team 11</option>
+                        <option value="12">Team 12</option>
+                        <option value="13">Team 13</option>
+                        <option value="14">Team 14</option>
+                        <option value="15">Team 15</option>
                     </select>
-                </label>
-                <label class="robot-inspector-field">
-                    <span>Color</span>
-                    <input id="robot-color-input" type="color" value="#61afef">
                 </label>
                 <div class="robot-inspector-row">
                     <span>Position</span>
@@ -93,17 +91,6 @@
                         <input id="simulation-ticks" type="number" min="1" step="1" value="1000">
                     </div>
                     <button id="btn-clear-sim" class="run-btn clear-sim-btn" disabled>Clear simulation</button>
-                </div>
-
-                <div class="sidebar-section">
-                    <label class="sidebar-label" for="theme-select">Theme</label>
-                    <div class="theme-row">
-                        <select id="theme-select">
-                            <option value="terminal-amber" selected>Amber Terminal</option>
-                            <option value="terminal-neon">Neon Matrix</option>
-                            <option value="one-dark">One Dark</option>
-                        </select>
-                    </div>
                 </div>
 
                 <div class="sidebar-section">
