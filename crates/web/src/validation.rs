@@ -20,11 +20,15 @@ pub struct ValidatedRequest {
     pub max_ticks: u32,
 }
 
+#[allow(clippy::result_large_err)]
 pub fn validate_run_request(
     req: &RunRequest,
 ) -> Result<ValidatedRequest, (StatusCode, Json<RunResponse>)> {
     if req.robots.is_empty() {
-        return Err(error_response(StatusCode::BAD_REQUEST, "No robots provided"));
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "No robots provided",
+        ));
     }
 
     if req.robots.len() > MAX_ROBOTS {
@@ -110,6 +114,7 @@ pub fn validate_run_request(
     Ok(ValidatedRequest { robots, max_ticks })
 }
 
+#[allow(clippy::result_large_err)]
 fn validate_spawn_point(
     robot_name: &str,
     spawn: &SpawnPointRequest,

@@ -63,10 +63,7 @@ impl RobotRunner {
                     context
                 );
             } else {
-                self.store
-                    .data_mut()
-                    .logs
-                    .push(format!("WASM trap: {}", e));
+                self.store.data_mut().logs.push(format!("WASM trap: {}", e));
                 self.store.data_mut().trapped = true;
             }
         }
