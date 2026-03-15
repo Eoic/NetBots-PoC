@@ -5,7 +5,7 @@ use wasmtime::{Caller, Engine, Linker};
 pub struct RobotState {
     pub robot_id: usize,
     pub actions: Vec<RobotAction>,
-    pub scan_result: f64, // pre-computed before calling on_tick
+    pub scan_result: f64,
     pub logs: Vec<String>,
     pub trapped: bool,
 }
@@ -70,6 +70,18 @@ pub fn create_linker(engine: &Engine) -> anyhow::Result<Linker<RobotState>> {
         "log_f64",
         |mut caller: Caller<'_, RobotState>, val: f64| {
             caller.data_mut().logs.push(format!("f64: {}", val));
+        },
+    )?;
+
+    linker.func_wrap(
+        "env",
+        "abort",
+        |mut caller: Caller<'_, RobotState>, _msg: i32, _file: i32, line: i32, col: i32| {
+            caller
+                .data_mut()
+                .logs
+                .push(format!("abort at {}:{}", line, col));
+            caller.data_mut().trapped = true;
         },
     )?;
 

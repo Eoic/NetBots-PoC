@@ -1,8 +1,24 @@
+use engine::scan::*;
 use engine::tick::*;
 use engine::world::{GameStatus, GameWorld, PlayerActions, RobotAction, RobotConfig};
 use wasm_runner::RobotRunner;
 
 const TEST_WAT: &str = include_str!("test_robot.wat");
+const TEST_WAT_ON_TICK_ONLY: &str = r#"
+(module
+  (type $t0 (func (param i32 f64 f64 f64 f64 f64 f64)))
+  (type $t1 (func (param f64)))
+  (type $t2 (func (param f64)))
+  (import "env" "set_speed" (func $set_speed (type $t1)))
+  (import "env" "rotate" (func $rotate (type $t2)))
+  (func $on_tick (export "on_tick") (type $t0)
+    local.get 5
+    call $set_speed
+    f64.const 1.0
+    call $rotate
+  )
+)
+"#;
 
 fn create_runner(robot_id: usize) -> RobotRunner {
     let _engine = wasmtime::Engine::new(&{
@@ -70,6 +86,34 @@ fn test_runner_calls_on_collision() {
 
     assert!(!actions.is_empty());
     assert!(matches!(actions[0], RobotAction::Rotate(_)));
+}
+
+#[test]
+fn test_runner_allows_missing_optional_event_handlers() {
+    let wasm_bytes = wat::parse_str(TEST_WAT_ON_TICK_ONLY).expect("Failed to parse WAT");
+    let mut runner = RobotRunner::new(&wasm_bytes, 0).expect("Failed to create runner");
+
+    let tick_actions = runner
+        .call_on_tick(1, 100.0, 100.0, 300.0, 0.0, 7.0, 0.0, -1.0)
+        .expect("on_tick failed");
+    assert!(
+        !tick_actions.is_empty(),
+        "Expected on_tick actions for minimal bot"
+    );
+
+    let on_hit_actions = runner.call_on_hit(5.0).expect("on_hit failed");
+    assert!(
+        on_hit_actions.is_empty(),
+        "Expected empty actions when on_hit is not exported"
+    );
+
+    let on_collision_actions = runner
+        .call_on_collision(0, 10.0, 20.0)
+        .expect("on_collision failed");
+    assert!(
+        on_collision_actions.is_empty(),
+        "Expected empty actions when on_collision is not exported"
+    );
 }
 
 #[test]

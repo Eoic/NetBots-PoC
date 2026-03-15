@@ -9,6 +9,8 @@ use crate::sandbox::{validate_wasm_exports, FUEL_PER_CALL};
 pub struct RobotRunner {
     store: Store<RobotState>,
     instance: Instance,
+    has_on_hit: bool,
+    has_on_collision: bool,
 }
 
 impl RobotRunner {
@@ -18,6 +20,8 @@ impl RobotRunner {
         let engine = Engine::new(&config)?;
 
         let module = Module::new(&engine, wasm_bytes)?;
+        let has_on_hit = module.exports().any(|e| e.name() == "on_hit");
+        let has_on_collision = module.exports().any(|e| e.name() == "on_collision");
         validate_wasm_exports(&module)?;
 
         let linker = create_linker(&engine)?;
@@ -26,7 +30,12 @@ impl RobotRunner {
 
         let instance = linker.instantiate(&mut store, &module)?;
 
-        Ok(Self { store, instance })
+        Ok(Self {
+            store,
+            instance,
+            has_on_hit,
+            has_on_collision,
+        })
     }
 
     pub fn take_logs(&mut self) -> Vec<String> {
@@ -38,10 +47,29 @@ impl RobotRunner {
     }
 
     fn refuel(&mut self) -> Result<()> {
-        // Drain remaining fuel and set fresh amount
         let _ = self.store.get_fuel()?;
         self.store.set_fuel(FUEL_PER_CALL)?;
         Ok(())
+    }
+
+    fn handle_call_result(&mut self, context: &str, result: anyhow::Result<()>) {
+        if let Err(e) = result {
+            if e.downcast_ref::<Trap>()
+                .is_some_and(|t| *t == Trap::OutOfFuel)
+            {
+                eprintln!(
+                    "[robot {}] out of fuel on {}",
+                    self.store.data().robot_id,
+                    context
+                );
+            } else {
+                self.store
+                    .data_mut()
+                    .logs
+                    .push(format!("WASM trap: {}", e));
+                self.store.data_mut().trapped = true;
+            }
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -67,86 +95,45 @@ impl RobotRunner {
                 "on_tick",
             )?;
 
-        match on_tick.call(
+        let result = on_tick.call(
             &mut self.store,
             (tick, energy, x, y, heading, speed, gun_heat),
-        ) {
-            Ok(()) => {}
-            Err(e) => {
-                // If fuel exhausted, robot forfeits turn but doesn't crash
-                if e.downcast_ref::<Trap>()
-                    .is_some_and(|t| *t == Trap::OutOfFuel)
-                {
-                    eprintln!(
-                        "[robot {}] out of fuel on tick {}",
-                        self.store.data().robot_id,
-                        tick
-                    );
-                } else {
-                    // Non-fuel trap — log it, set trapped flag (caller will kill robot)
-                    self.store.data_mut().logs.push(format!("WASM trap: {}", e));
-                    self.store.data_mut().trapped = true;
-                }
-            }
-        }
+        );
+        self.handle_call_result(&format!("tick {}", tick), result);
 
         Ok(self.store.data().actions.clone())
     }
 
     pub fn call_on_hit(&mut self, damage: f64) -> Result<Vec<RobotAction>> {
         self.store.data_mut().clear_actions();
+        if !self.has_on_hit {
+            return Ok(self.store.data().actions.clone());
+        }
         self.refuel()?;
 
         let on_hit = self
             .instance
             .get_typed_func::<(f64,), ()>(&mut self.store, "on_hit")?;
 
-        match on_hit.call(&mut self.store, (damage,)) {
-            Ok(()) => {}
-            Err(e) => {
-                if e.downcast_ref::<Trap>()
-                    .is_some_and(|t| *t == Trap::OutOfFuel)
-                {
-                    eprintln!(
-                        "[robot {}] out of fuel on on_hit",
-                        self.store.data().robot_id
-                    );
-                } else {
-                    // Non-fuel trap — log it, set trapped flag (caller will kill robot)
-                    self.store.data_mut().logs.push(format!("WASM trap: {}", e));
-                    self.store.data_mut().trapped = true;
-                }
-            }
-        }
+        let result = on_hit.call(&mut self.store, (damage,));
+        self.handle_call_result("on_hit", result);
 
         Ok(self.store.data().actions.clone())
     }
 
     pub fn call_on_collision(&mut self, kind: i32, x: f64, y: f64) -> Result<Vec<RobotAction>> {
         self.store.data_mut().clear_actions();
+        if !self.has_on_collision {
+            return Ok(self.store.data().actions.clone());
+        }
         self.refuel()?;
 
         let on_collision = self
             .instance
             .get_typed_func::<(i32, f64, f64), ()>(&mut self.store, "on_collision")?;
 
-        match on_collision.call(&mut self.store, (kind, x, y)) {
-            Ok(()) => {}
-            Err(e) => {
-                if e.downcast_ref::<Trap>()
-                    .is_some_and(|t| *t == Trap::OutOfFuel)
-                {
-                    eprintln!(
-                        "[robot {}] out of fuel on on_collision",
-                        self.store.data().robot_id
-                    );
-                } else {
-                    // Non-fuel trap — log it, set trapped flag (caller will kill robot)
-                    self.store.data_mut().logs.push(format!("WASM trap: {}", e));
-                    self.store.data_mut().trapped = true;
-                }
-            }
-        }
+        let result = on_collision.call(&mut self.store, (kind, x, y));
+        self.handle_call_result("on_collision", result);
 
         Ok(self.store.data().actions.clone())
     }
