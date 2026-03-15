@@ -26,7 +26,7 @@ Update `lib.rs`: add `pub mod scan;` and `pub use scan::*;` (maintains re-export
 
 - Split `run_events_phase()` into three private functions. Each takes `&mut GameWorld` plus `&mut TickEvents` and `&mut Vec<GameEvent>` to accumulate results:
   - `process_bullet_hits(world: &mut GameWorld, tick_events: &mut TickEvents, game_events: &mut Vec<GameEvent>)`
-  - `process_wall_collisions(world: &mut GameWorld, game_events: &mut Vec<GameEvent>)`
+  - `process_wall_collisions(world: &mut GameWorld, tick_events: &mut TickEvents, game_events: &mut Vec<GameEvent>)`
   - `process_robot_collisions(world: &mut GameWorld, tick_events: &mut TickEvents, game_events: &mut Vec<GameEvent>)`
 - `run_events_phase()` creates `tick_events` and `game_events`, calls the three in sequence, returns the tuple.
 - Replace magic numbers with constants from `world.rs`:
@@ -150,7 +150,7 @@ Extracted from `renderer.ts`. Functions receive the state they need as parameter
 - `updateRobotVisual(visual, robotState, tick)` — updates position, rotation, health bar
 - `clearRobotVisuals()`, `ensureRobotVisuals()` — lifecycle management
 - `colorForRobot()` — team color helper
-- `createSelectionMarker(theme)` / `updateSelectionMarker(marker, robotState)`
+- Selection marker functions (`ensureSelectionMarker`, `updateSelectionMarker`) stay in `renderer.ts` — tightly coupled to module-level `selectedRobotName` state
 - `robotAtPoint(robotGraphics, x, y, robotSize, hitPadding)` — hit-testing
 - `RobotGraphic`, `RobotLabel`, `RobotRenderState` type interfaces move here
 - Constants: `HP_BAR_WIDTH = 40`, `HP_BAR_HEIGHT = 4`, `HIT_RADIUS_PADDING = 2`
