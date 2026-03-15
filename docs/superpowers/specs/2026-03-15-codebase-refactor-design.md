@@ -8,28 +8,33 @@ Split long implementations into multiple files, extract magic numbers into named
 
 - Comments: only `///` doc comments on methods/attributes, only when non-obvious. Remove all `//` inline comments.
 - Constants: module-local (top of file that uses them). Game physics constants go in `engine/src/world.rs`.
-- No new abstractions, traits, or class hierarchies. Just file splits, constant extraction, and deduplication.
+- No new traits or class hierarchies. Lightweight parameter structs are allowed where needed for file extraction.
 
 ---
 
 ## Section 1: Engine Crate
 
-### New file: `crates/engine/src/scan.rs` (~80 lines)
+### New file: `crates/engine/src/scan.rs` (~50 lines)
 
 Extracted from `tick.rs`:
-- `pub fn compute_scan(world: &GameWorld, robot_id: usize) -> f64`
-- `pub fn normalize_angle(angle: f64) -> f64` — helper for angle wrapping to [-180, 180]
+- `pub fn compute_scan(world: &GameWorld, robot_id: usize) -> f64` — moved from `tick.rs`
+- `pub fn normalize_angle(angle: f64) -> f64` — new helper extracted from the inline `while` loop in `compute_scan` (tick.rs lines 318-323). Normalizes to [-180, 180] range. Note: `run_resolution_phase` uses [0, 360) normalization which is a different operation — leave that as-is.
 
-Update `lib.rs` to add `pub mod scan;`.
+Update `lib.rs`: add `pub mod scan;` and `pub use scan::*;` (maintains re-export pattern so downstream crates like `web` don't break).
 
-### Changes to `tick.rs` (628 → ~480 lines)
+### Changes to `tick.rs` (628 → ~560 lines)
 
-- Split `run_events_phase()` into three private functions:
-  - `process_bullet_hits(world: &mut GameWorld) -> Vec<HitEvent>`
-  - `process_wall_collisions(world: &mut GameWorld)`
-  - `process_robot_collisions(world: &mut GameWorld)`
-- `run_events_phase()` calls the three in sequence.
-- Replace all magic numbers with constants from `world.rs`.
+- Split `run_events_phase()` into three private functions. Each takes `&mut GameWorld` plus `&mut TickEvents` and `&mut Vec<GameEvent>` to accumulate results:
+  - `process_bullet_hits(world: &mut GameWorld, tick_events: &mut TickEvents, game_events: &mut Vec<GameEvent>)`
+  - `process_wall_collisions(world: &mut GameWorld, game_events: &mut Vec<GameEvent>)`
+  - `process_robot_collisions(world: &mut GameWorld, tick_events: &mut TickEvents, game_events: &mut Vec<GameEvent>)`
+- `run_events_phase()` creates `tick_events` and `game_events`, calls the three in sequence, returns the tuple.
+- Replace magic numbers with constants from `world.rs`:
+  - `hit.power * 2.0` → `hit.power * HIT_REWARD_MULTIPLIER`
+  - `robot.energy -= 1.0` → `robot.energy -= ROBOT_COLLISION_DAMAGE`
+  - `+ 0.5` (separation) → `+ COLLISION_SEPARATION_BUFFER`
+  - `power.clamp(1.0, 3.0)` → `power.clamp(MIN_BULLET_POWER, MAX_BULLET_POWER)`
+  - `1.0 + power / 5.0` → `GUN_HEAT_BASE + power / GUN_HEAT_POWER_DIVISOR`
 - Remove all `//` comments.
 
 ### Changes to `world.rs`
@@ -75,10 +80,22 @@ Remove `//` comments.
 ### New file: `crates/web/src/validation.rs` (~120 lines)
 
 Extracted from `routes.rs`:
-- `pub fn validate_run_request(req: &RunRequest) -> Result<ValidatedRequest, ErrorResponse>`
+- Constants: `MAX_ROBOTS: usize = 16`, `MAX_SOURCE_BYTES: usize = 64 * 1024`, `MAX_ALLOWED_TICKS: u32 = 100_000`
+- `ValidatedRequest` struct:
+  ```rust
+  pub struct ValidatedRobot {
+      pub name: String,
+      pub source: String,
+      pub team: u8,
+      pub spawn: Option<SpawnPoint>,
+  }
+  pub struct ValidatedRequest {
+      pub robots: Vec<ValidatedRobot>,
+      pub max_ticks: u32, // resolved from Option with default
+  }
+  ```
+- `pub fn validate_run_request(req: &RunRequest) -> Result<ValidatedRequest, ErrorResponse>` — all input validation including team IDs, source length, spawn bounds, robot count
 - Private helper `validate_spawn_point(spawn: &SpawnPoint) -> Result<(), String>`
-- Constants: `MAX_ROBOTS`, `MAX_SOURCE_BYTES`, `MAX_ALLOWED_TICKS`
-- `ValidatedRequest` struct holding validated data passed to compilation/simulation.
 
 ### Changes to `routes.rs` (331 → ~200 lines)
 
@@ -100,42 +117,58 @@ Extracted from `routes.rs`:
 
 ## Section 4: Frontend TypeScript
 
-### New file: `crates/web/assets/ts/placement.ts` (~170 lines)
+### New file: `crates/web/assets/ts/placement.ts` (~130 lines)
 
-Extracted from `app.ts`:
-- Bot placement state machine: `startPlacementMode()`, `stopPlacementMode()`
-- Pointer/click handlers for arena bot placement
-- Exports functions that `app.ts` calls to enter/exit placement and handle pointer events.
+Extracted from `app.ts`. The placement state machine needs access to several pieces of app state. Use a params object to pass dependencies:
+
+```typescript
+interface PlacementDeps {
+  dom: DomElements;
+  files: FileStore;
+  renderer: { worldToArena, arenaToWorld, addPlacementGhost, ... };
+  onComplete: () => void;
+}
+
+export function startPlacementMode(deps: PlacementDeps): () => void;
+// Returns a stopPlacementMode function
+```
+
+This keeps the extraction clean without a full class hierarchy.
 
 ### Changes to `app.ts` (519 → ~350 lines)
 
 - Remove placement logic (moved to `placement.ts`).
-- Add constant: `const DEFAULT_ENEMY_HEADING = 180;`
-- Replace hardcoded `1200, 800` arena dimensions with constants.
+- Rename existing `ENEMY_HEADING` constant to `DEFAULT_ENEMY_HEADING` for clarity.
+- Add arena dimension constants: `const ARENA_WIDTH = 1200; const ARENA_HEIGHT = 800;`
 - Remove `//` comments.
 
 ### New file: `crates/web/assets/ts/visuals.ts` (~200 lines)
 
-Extracted from `renderer.ts`:
-- `createRobotVisual()` — builds robot graphics, label, health bar
-- `updateRobotVisual()` — updates position, rotation, health for a tick
-- Selection marker creation and update
-- `robotAtPoint()` — hit-testing for picking
-- Constants: `HP_BAR_WIDTH`, `HP_BAR_HEIGHT`, `HIT_RADIUS_TOLERANCE`
+Extracted from `renderer.ts`. Functions receive the state they need as parameters rather than closing over module-level variables:
+
+- `createRobotVisual(viewport, theme, teamIndex, name)` — builds robot graphics, label, health bar
+- `updateRobotVisual(visual, robotState, tick)` — updates position, rotation, health bar
+- `clearRobotVisuals()`, `ensureRobotVisuals()` — lifecycle management
+- `colorForRobot()` — team color helper
+- `createSelectionMarker(theme)` / `updateSelectionMarker(marker, robotState)`
+- `robotAtPoint(robotGraphics, x, y, robotSize, hitPadding)` — hit-testing
+- `RobotGraphic`, `RobotLabel`, `RobotRenderState` type interfaces move here
+- Constants: `HP_BAR_WIDTH = 40`, `HP_BAR_HEIGHT = 4`, `HIT_RADIUS_PADDING = 2`
 
 ### Changes to `renderer.ts` (659 → ~450 lines)
 
 - Import visual functions from `visuals.ts`.
 - Keeps: Pixi/viewport init, theme reading, `renderTick()` orchestration, grid drawing.
-- Add constants at top: `RENDER_SCALE`, `GRID_SPACING`.
+- Promote existing `gridSpacing` local (line 394) to module-level constant: `const GRID_SPACING = 50;`
+- `RENDER_SCALE` already exists at module level (line 106) — no change needed.
 - Remove `//` comments.
 
-### Other TS files — comment cleanup only where needed.
+### Other TS files — no changes needed (already clean of `//` comments).
 
 ---
 
 ## Out of Scope
 
-- No new abstractions, traits, or class hierarchies
+- No new traits or class hierarchies
 - No test changes beyond updating imports for moved functions
 - No behavioral changes — pure refactor
