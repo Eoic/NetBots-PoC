@@ -1,5 +1,16 @@
-import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js';
+import { Application, Graphics } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
+import {
+    type ArenaTheme,
+    type RobotGraphic,
+    type RobotLabel,
+    type RobotRenderState,
+    clearRobotVisuals as clearRobotVisualsVisuals,
+    createRobotVisual,
+    numberToHexColor,
+    pickRobotAtPoint,
+    updateHealthBar,
+} from './visuals';
 
 export interface RobotInfo {
     name: string;
@@ -31,39 +42,6 @@ export interface TickData {
     robots: TickRobotState[];
     bullets?: TickBulletState[];
     events?: TickEvent[];
-}
-
-interface RobotGraphic {
-    graphic: Graphics;
-    color: number;
-}
-
-interface RobotLabel {
-    container: Container;
-    text: Text;
-    hpBar: Graphics;
-    hpBg: Graphics;
-    color: number;
-}
-
-interface RobotRenderState {
-    x: number;
-    y: number;
-    heading: number;
-    alive: boolean;
-}
-
-interface ArenaTheme {
-    sceneBackgroundCss: string;
-    textColorCss: string;
-    borderColor: number;
-    gridColor: number;
-    hpBackgroundColor: number;
-    hpWarningColor: number;
-    hpDangerColor: number;
-    teamColors: number[];
-    enemyPalette: number[];
-    bulletFallbackColor: number;
 }
 
 export interface ArenaViewState {
@@ -101,11 +79,17 @@ let robotRenderStates: RobotRenderState[] = [];
 let robotVisualSignature = '';
 let selectedRobotName: string | null = null;
 let selectionMarker: Graphics | null = null;
-let arenaTheme: ArenaTheme = buildArenaTheme();
 const ROBOT_SIZE = 18;
-const HP_BAR_WIDTH = 40;
-const HP_BAR_HEIGHT = 4;
 const RENDER_SCALE = 2;
+const MAX_TEAMS = 16;
+const GRID_SPACING = 50;
+const TEAM_COLOR_FALLBACKS = [
+    0x61afef, 0xc678dd, 0x98c379, 0xe06c75,
+    0x56b6c2, 0xe5c07b, 0xd19a66, 0xbe5046,
+    0x7f848e, 0x2bbac5, 0x8dc891, 0xff9e64,
+    0x73daca, 0xb4befe, 0xf38ba8, 0xa6e3a1,
+];
+let arenaTheme: ArenaTheme = buildArenaTheme();
 
 function readCssVar(name: string, fallback: string): string {
     const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -128,10 +112,12 @@ function cssColorToNumber(color: string, fallback: number): number {
     }
 
     const rgbMatch = value.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+
     if (rgbMatch) {
         const [r, g, b] = rgbMatch.slice(1, 4).map((channel) =>
             Math.max(0, Math.min(255, Number.parseInt(channel, 10))),
         );
+
         return (r << 16) + (g << 8) + b;
     }
 
@@ -139,15 +125,12 @@ function cssColorToNumber(color: string, fallback: number): number {
 }
 
 function buildArenaTheme(): ArenaTheme {
-    const enemyVarNames = [
-        '--nb-pixi-enemy-1',
-        '--nb-pixi-enemy-2',
-        '--nb-pixi-enemy-3',
-        '--nb-pixi-enemy-4',
-        '--nb-pixi-enemy-5',
-        '--nb-pixi-enemy-6',
-    ];
-    const enemyFallbacks = [0xecc06c, 0xffb4ab, 0xd9c4a0, 0xb2cfa7, 0x9a8f80, 0xf6e0bb];
+    const teamColors = Array.from({ length: MAX_TEAMS }, (_, team) =>
+        cssColorToNumber(
+            readCssVar(`--nb-pixi-team-${team}`, `#${TEAM_COLOR_FALLBACKS[team].toString(16).padStart(6, '0')}`),
+            TEAM_COLOR_FALLBACKS[team],
+        ),
+    );
 
     return {
         sceneBackgroundCss: readCssVar('--nb-pixi-bg', '#201b13'),
@@ -157,52 +140,28 @@ function buildArenaTheme(): ArenaTheme {
         hpBackgroundColor: cssColorToNumber(readCssVar('--nb-pixi-hp-bg', '#4e4639'), 0x4e4639),
         hpWarningColor: cssColorToNumber(readCssVar('--nb-pixi-hp-warning', '#ecc06c'), 0xecc06c),
         hpDangerColor: cssColorToNumber(readCssVar('--nb-pixi-hp-danger', '#ffb4ab'), 0xffb4ab),
-        teamColors: [cssColorToNumber(readCssVar('--nb-pixi-team-0', '#b2cfa7'), 0xb2cfa7)],
-        enemyPalette: enemyVarNames.map((varName, index) =>
-            cssColorToNumber(readCssVar(varName, '#ecc06c'), enemyFallbacks[index]),
-        ),
-        bulletFallbackColor: cssColorToNumber(readCssVar('--nb-pixi-enemy-1', '#ecc06c'), 0xecc06c),
+        teamColors,
+        bulletFallbackColor: teamColors[0],
     };
 }
 
-function numberToHexColor(color: number): string {
-    return `#${Math.max(0, Math.min(0xffffff, color)).toString(16).padStart(6, '0')}`;
+function defaultUnplacedPosition(index: number, worldWidth: number, worldHeight: number): { x: number; y: number } {
+    const cols = 4;
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = ROBOT_SIZE + 40 + (col * 120);
+    const y = ROBOT_SIZE + 40 + (row * 100);
+    return {
+        x: Math.max(ROBOT_SIZE, Math.min(worldWidth - ROBOT_SIZE, x)),
+        y: Math.max(ROBOT_SIZE, Math.min(worldHeight - ROBOT_SIZE, y)),
+    };
 }
 
-function colorForRobot(
-    robotIndex: number,
-    robotInfos: RobotInfo[],
-    colorOverrides: Record<string, string>,
-): number {
-    const info = robotInfos[robotIndex];
-    if (!info) return 0xffffff;
-    const override = colorOverrides[info.name];
-    if (override) {
-        const parsed = cssColorToNumber(override, Number.NaN);
-        if (!Number.isNaN(parsed)) {
-            return parsed;
-        }
-    }
-    if (info.team === 0) return arenaTheme.teamColors[0];
-    const enemyIndex = robotInfos
-        .slice(0, robotIndex)
-        .filter((r) => r.team !== 0).length;
-    return arenaTheme.enemyPalette[enemyIndex % arenaTheme.enemyPalette.length];
+function buildRobotVisualSignature(robotInfos: RobotInfo[]): string {
+    return robotInfos.map((info) => `${info.name}|${info.team}`).join(';');
 }
 
-function buildRobotVisualSignature(
-    robotInfos: RobotInfo[],
-    colorOverrides: Record<string, string>,
-): string {
-    const robotsSignature = robotInfos.map((info) => `${info.name}|${info.team}`).join(';');
-    const colorSignature = Object.keys(colorOverrides)
-        .sort()
-        .map((name) => `${name}:${colorOverrides[name]}`)
-        .join(';');
-    return `${robotsSignature}||${colorSignature}`;
-}
-
-function clearRobotVisuals(): void {
+function clearRobotVisualsLocal(): void {
     if (!viewport) {
         robotGraphics = [];
         robotLabels = [];
@@ -211,14 +170,7 @@ function clearRobotVisuals(): void {
         return;
     }
 
-    for (const robot of robotGraphics) {
-        viewport.removeChild(robot.graphic);
-        robot.graphic.destroy();
-    }
-    for (const label of robotLabels) {
-        viewport.removeChild(label.container);
-        label.container.destroy({ children: true });
-    }
+    clearRobotVisualsVisuals(viewport, robotGraphics, robotLabels);
 
     robotGraphics = [];
     robotLabels = [];
@@ -226,75 +178,19 @@ function clearRobotVisuals(): void {
     robotVisualSignature = '';
 }
 
-function createRobotVisual(
-    index: number,
-    robotInfos: RobotInfo[],
-    colorOverrides: Record<string, string>,
-): void {
-    if (!viewport) {
-        return;
-    }
-    const info = robotInfos[index];
-    const color = colorForRobot(index, robotInfos, colorOverrides);
-
-    const graphic = new Graphics();
-    graphic.circle(0, 0, ROBOT_SIZE);
-    graphic.fill({ color, alpha: 0.3 });
-    graphic.circle(0, 0, ROBOT_SIZE);
-    graphic.stroke({ color, width: 2 });
-    graphic.moveTo(0, 0);
-    graphic.lineTo(ROBOT_SIZE + 8, 0);
-    graphic.stroke({ color, width: 3 });
-    viewport.addChild(graphic);
-    robotGraphics.push({ graphic, color });
-
-    const labelContainer = new Container();
-    const textStyle = new TextStyle({
-        fontSize: 11,
-        fill: arenaTheme.textColorCss,
-        fontFamily: 'JetBrains Mono, Roboto Mono, monospace',
-        fontWeight: 'bold',
-    });
-    const text = new Text({ text: info.name, style: textStyle });
-    text.anchor.set(0.5, 0);
-    text.resolution = RENDER_SCALE * 2;
-    labelContainer.addChild(text);
-
-    const hpBg = new Graphics();
-    hpBg.roundRect(-HP_BAR_WIDTH / 2, 0, HP_BAR_WIDTH, HP_BAR_HEIGHT, 2);
-    hpBg.fill({ color: arenaTheme.hpBackgroundColor, alpha: 0.65 });
-    hpBg.y = text.height + 2;
-    labelContainer.addChild(hpBg);
-
-    const hpBar = new Graphics();
-    hpBar.y = hpBg.y;
-    labelContainer.addChild(hpBar);
-
-    viewport.addChild(labelContainer);
-    robotLabels.push({
-        container: labelContainer,
-        text,
-        hpBar,
-        hpBg,
-        color,
-    });
-    robotRenderStates.push({
-        x: 0,
-        y: 0,
-        heading: 0,
-        alive: true,
-    });
-}
-
-function ensureRobotVisuals(robotInfos: RobotInfo[], colorOverrides: Record<string, string>): void {
-    const nextSignature = buildRobotVisualSignature(robotInfos, colorOverrides);
+function ensureRobotVisuals(robotInfos: RobotInfo[]): void {
+    const nextSignature = buildRobotVisualSignature(robotInfos);
     if (nextSignature === robotVisualSignature) {
         return;
     }
 
-    clearRobotVisuals();
+    clearRobotVisualsLocal();
+    if (!viewport) return;
     for (let i = 0; i < robotInfos.length; i++) {
-        createRobotVisual(i, robotInfos, colorOverrides);
+        const result = createRobotVisual(viewport, arenaTheme, i, robotInfos, ROBOT_SIZE, RENDER_SCALE, MAX_TEAMS);
+        robotGraphics.push(result.graphic);
+        robotLabels.push(result.label);
+        robotRenderStates.push(result.state);
     }
     robotVisualSignature = nextSignature;
 }
@@ -340,7 +236,6 @@ export async function initArena(
     height: number,
     robotInfos: RobotInfo[],
     viewState: ArenaViewState | null = null,
-    colorOverrides: Record<string, string> = {},
 ): Promise<Application> {
     destroy();
     arenaTheme = buildArenaTheme();
@@ -402,12 +297,11 @@ export async function initArena(
     viewport.addChild(border);
 
     const grid = new Graphics();
-    const gridSpacing = 50;
-    for (let x = gridSpacing; x < width; x += gridSpacing) {
+    for (let x = GRID_SPACING; x < width; x += GRID_SPACING) {
         grid.moveTo(x, 0);
         grid.lineTo(x, height);
     }
-    for (let y = gridSpacing; y < height; y += gridSpacing) {
+    for (let y = GRID_SPACING; y < height; y += GRID_SPACING) {
         grid.moveTo(0, y);
         grid.lineTo(width, y);
     }
@@ -415,7 +309,7 @@ export async function initArena(
     viewport.addChild(grid);
 
     ensureSelectionMarker();
-    ensureRobotVisuals(robotInfos, colorOverrides);
+    ensureRobotVisuals(robotInfos);
     updateSelectionMarker(robotInfos);
 
     return app;
@@ -424,21 +318,11 @@ export async function initArena(
 export function renderPreview(
     robotInfos: RobotInfo[],
     placements: PreviewPlacementMap = {},
-    colorOverrides: Record<string, string> = {},
 ): void {
     if (!app || !viewport) return;
-    ensureRobotVisuals(robotInfos, colorOverrides);
+    ensureRobotVisuals(robotInfos);
     ensureSelectionMarker();
     const view = viewport;
-    const arenaHeight = view.worldHeight;
-
-    const team0 = robotInfos
-        .map((r, i) => ({ ...r, idx: i }))
-        .filter((r) => r.team === 0);
-    const team1 = robotInfos
-        .map((r, i) => ({ ...r, idx: i }))
-        .filter((r) => r.team !== 0);
-
     robotInfos.forEach((info, i) => {
         if (i >= robotGraphics.length) return;
         const { graphic } = robotGraphics[i];
@@ -446,21 +330,21 @@ export function renderPreview(
         let x: number;
         let y: number;
         let heading: number;
+        const previousState = robotRenderStates[i];
         const placement = placements[info.name];
         if (placement) {
             x = placement.x;
             y = placement.y;
-            heading = placement.heading ?? (info.team === 0 ? 0 : 180);
-        } else if (info.team === 0) {
-            const posIdx = team0.findIndex((r) => r.idx === i);
-            x = 100;
-            y = (arenaHeight * (posIdx + 1)) / (team0.length + 1);
-            heading = 0;
+            heading = placement.heading ?? previousState?.heading ?? 0;
+        } else if (previousState) {
+            x = previousState.x;
+            y = previousState.y;
+            heading = previousState.heading;
         } else {
-            const posIdx = team1.findIndex((r) => r.idx === i);
-            x = 550;
-            y = (arenaHeight * (posIdx + 1)) / (team1.length + 1);
-            heading = 180;
+            const fallback = defaultUnplacedPosition(i, view.worldWidth, view.worldHeight);
+            x = fallback.x;
+            y = fallback.y;
+            heading = 0;
         }
 
         graphic.x = x;
@@ -479,7 +363,7 @@ export function renderPreview(
         label.container.x = x;
         label.container.y = y + ROBOT_SIZE + 4;
         label.container.visible = true;
-        updateHealthBar(label, 100);
+        updateHealthBar(label, 100, arenaTheme);
     });
 
     bulletGraphics.forEach((bullet) => {
@@ -528,22 +412,7 @@ export function pickRobotNameAtClient(
         return null;
     }
 
-    let closestIndex = -1;
-    let closestDistanceSq = Number.POSITIVE_INFINITY;
-    const hitRadiusSq = (ROBOT_SIZE + 2) * (ROBOT_SIZE + 2);
-
-    for (let i = 0; i < robotInfos.length && i < robotRenderStates.length; i++) {
-        const state = robotRenderStates[i];
-        const dx = state.x - worldPos.x;
-        const dy = state.y - worldPos.y;
-        const distSq = dx * dx + dy * dy;
-        if (distSq > hitRadiusSq || distSq >= closestDistanceSq) {
-            continue;
-        }
-        closestIndex = i;
-        closestDistanceSq = distSq;
-    }
-
+    const closestIndex = pickRobotAtPoint(worldPos.x, worldPos.y, robotInfos, robotRenderStates, ROBOT_SIZE);
     return closestIndex >= 0 ? robotInfos[closestIndex].name : null;
 }
 
@@ -560,9 +429,11 @@ export function refreshSelectedRobotMarker(robotInfos: RobotInfo[]): void {
 
 export function getRobotSceneInfo(name: string, robotInfos: RobotInfo[]): RobotSceneInfo | null {
     const index = robotInfos.findIndex((robot) => robot.name === name);
+
     if (index < 0 || index >= robotRenderStates.length || index >= robotGraphics.length) {
         return null;
     }
+
     const state = robotRenderStates[index];
     return {
         name,
@@ -578,10 +449,9 @@ export function getRobotSceneInfo(name: string, robotInfos: RobotInfo[]): RobotS
 export function renderTick(
     tickData: TickData,
     robotInfos: RobotInfo[],
-    colorOverrides: Record<string, string> = {},
 ): void {
     if (!app || !viewport) return;
-    ensureRobotVisuals(robotInfos, colorOverrides);
+    ensureRobotVisuals(robotInfos);
     ensureSelectionMarker();
     const view = viewport;
 
@@ -604,7 +474,7 @@ export function renderTick(
         label.container.x = robot.x;
         label.container.y = robot.y + ROBOT_SIZE + 4;
         label.container.visible = robot.alive;
-        updateHealthBar(label, robot.energy);
+        updateHealthBar(label, robot.energy, arenaTheme);
     });
 
     bulletGraphics.forEach((bullet) => {
@@ -633,22 +503,6 @@ export function renderTick(
         bulletGraphics.push(graphic);
     });
     updateSelectionMarker(robotInfos);
-}
-
-function updateHealthBar(label: RobotLabel, energy: number): void {
-    const pct = Math.max(0, Math.min(1, energy / 100));
-    const barW = HP_BAR_WIDTH * pct;
-
-    let barColor: number;
-    if (pct > 0.5) barColor = label.color;
-    else if (pct > 0.25) barColor = arenaTheme.hpWarningColor;
-    else barColor = arenaTheme.hpDangerColor;
-
-    label.hpBar.clear();
-    if (barW > 0) {
-        label.hpBar.roundRect(-HP_BAR_WIDTH / 2, 0, barW, HP_BAR_HEIGHT, 2);
-        label.hpBar.fill(barColor);
-    }
 }
 
 export function destroy(): void {
