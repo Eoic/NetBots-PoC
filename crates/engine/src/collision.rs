@@ -39,7 +39,7 @@ pub fn detect_bullet_robot_collisions(world: &GameWorld) -> Vec<BulletHit> {
                 hits.push(BulletHit {
                     bullet_index: bi,
                     robot_id: robot.id,
-                    damage: bullet.power * 4.0,
+                    damage: bullet.power * BULLET_DAMAGE_MULTIPLIER,
                     power: bullet.power,
                     shooter_id: bullet.owner_id,
                 });
@@ -55,10 +55,10 @@ pub fn detect_robot_wall_collisions(world: &GameWorld) -> Vec<WallCollision> {
         if !robot.alive {
             continue;
         }
-        if robot.x < ROBOT_RADIUS
-            || robot.x > world.arena_width - ROBOT_RADIUS
-            || robot.y < ROBOT_RADIUS
-            || robot.y > world.arena_height - ROBOT_RADIUS
+        if robot.x <= ROBOT_RADIUS
+            || robot.x >= world.arena_width - ROBOT_RADIUS
+            || robot.y <= ROBOT_RADIUS
+            || robot.y >= world.arena_height - ROBOT_RADIUS
         {
             collisions.push(WallCollision {
                 robot_id: robot.id,
@@ -102,7 +102,6 @@ mod tests {
     #[test]
     fn test_bullet_hits_robot() {
         let mut world = test_world_2v2();
-        // Robot 1 is at x=550 for team 1
         world.bullets.push(Bullet {
             owner_id: 0,
             owner_team: 0,
@@ -138,6 +137,20 @@ mod tests {
     fn test_wall_collision_at_boundary() {
         let mut world = test_world_2v2();
         world.robots[0].x = 5.0;
+        let collisions = detect_robot_wall_collisions(&world);
+        assert_eq!(collisions.len(), 1);
+        assert_eq!(collisions[0].robot_id, 0);
+    }
+
+    #[test]
+    fn test_wall_collision_on_exact_arena_border() {
+        let mut world = test_world_2v2();
+        world.robots[0].x = ROBOT_RADIUS;
+        let collisions = detect_robot_wall_collisions(&world);
+        assert_eq!(collisions.len(), 1);
+        assert_eq!(collisions[0].robot_id, 0);
+
+        world.robots[0].x = world.arena_width - ROBOT_RADIUS;
         let collisions = detect_robot_wall_collisions(&world);
         assert_eq!(collisions.len(), 1);
         assert_eq!(collisions[0].robot_id, 0);
