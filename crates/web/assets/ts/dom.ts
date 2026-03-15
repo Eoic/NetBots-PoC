@@ -17,7 +17,6 @@ export const dom = {
     robotInspector: requiredEl<HTMLDivElement>('robot-inspector'),
     robotNameInput: requiredEl<HTMLInputElement>('robot-name-input'),
     robotTeamSelect: requiredEl<HTMLSelectElement>('robot-team-select'),
-    robotColorInput: requiredEl<HTMLInputElement>('robot-color-input'),
     robotPositionValue: requiredEl<HTMLSpanElement>('robot-position-value'),
     robotStatusValue: requiredEl<HTMLSpanElement>('robot-status-value'),
     pageLoadingCover: requiredEl<HTMLDivElement>('page-loading-cover'),
@@ -28,7 +27,6 @@ export const dom = {
     runBtn: requiredEl<HTMLButtonElement>('btn-run'),
     clearSimulationBtn: requiredEl<HTMLButtonElement>('btn-clear-sim'),
     simulationTicksInput: requiredEl<HTMLInputElement>('simulation-ticks'),
-    themeSelect: requiredEl<HTMLSelectElement>('theme-select'),
     addBotBtn: requiredEl<HTMLButtonElement>('btn-add-bot'),
     templateSelect: requiredEl<HTMLSelectElement>('template-select'),
     tabBtns: Array.from(document.querySelectorAll<HTMLButtonElement>('.tab')),
@@ -44,3 +42,5 @@ export const dom = {
     arenaPanel: requiredEl<HTMLDivElement>('arena-panel'),
     editorOverlay: requiredEl<HTMLDivElement>('editor-overlay'),
 };
+
+export type DomElements = typeof dom;

@@ -3,6 +3,7 @@ import { dom } from './dom';
 import { CodeEditor } from './editor';
 import { FileStore } from './file-store';
 import { LogPanel } from './logs';
+import { startBotPlacementMode, PlacementDeps } from './placement';
 import { ReplayController } from './replay';
 import {
     destroy,
@@ -17,7 +18,6 @@ import {
     worldPositionFromClient,
 } from './renderer';
 import { TemplateLoader } from './templates';
-import { ThemeController } from './theme';
 import type { ReplayData } from './types';
 import { setupEditorResize, setupTabs } from './ui';
 
@@ -25,7 +25,8 @@ const PAGE_LOADING_MIN_MS = 550;
 const SCENE_LOADING_MIN_MS = 700;
 const DEFAULT_SIMULATION_TICKS = 1000;
 const MAX_SIMULATION_TICKS = 100_000;
-const ENEMY_HEADING = 180;
+const ARENA_WIDTH = 1200;
+const ARENA_HEIGHT = 800;
 
 function wait(ms: number): Promise<void> {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -60,7 +61,7 @@ export async function bootstrap(): Promise<void> {
         tickDisplay: dom.tickDisplay,
         speedBtns: dom.speedBtns,
         onRenderTick: (tick, robotInfos) => {
-            renderTick(tick, robotInfos, files.getColorOverrides());
+            renderTick(tick, robotInfos);
             updateSelectedRobotPanel();
         },
         onLogTickEvents: (tick, tickIndex, events, robotInfos) =>
@@ -79,7 +80,6 @@ export async function bootstrap(): Promise<void> {
             renderPreview(
                 files.getRobotInfos(),
                 files.getPreviewPlacements(),
-                files.getColorOverrides(),
             );
             updateSimulationUiState();
         },
@@ -88,10 +88,6 @@ export async function bootstrap(): Promise<void> {
     let stopPlacementMode: (() => void) | null = null;
     let selectedRobotFileName: string | null = null;
     let selectedRobotName: string | null = null;
-
-    const themes = new ThemeController(dom.themeSelect, async () => {
-        await onThemeChanged();
-    });
 
     setupTabs({
         tabBtns: dom.tabBtns,
@@ -104,6 +100,17 @@ export async function bootstrap(): Promise<void> {
         arenaPanel: dom.arenaPanel,
         editorOverlay: dom.editorOverlay,
     });
+
+    const placementDeps: PlacementDeps = {
+        dom,
+        files,
+        replay,
+        worldPositionFromClient,
+        renderPreview,
+        updateSimulationUiState: () => updateSimulationUiState(),
+        clearReplayData: () => { replayData = null; },
+        onPlacementEnd: () => { stopPlacementMode = null; },
+    };
 
     dom.addBotBtn.addEventListener('click', async () => {
         stopPlacementMode?.();
@@ -118,7 +125,7 @@ export async function bootstrap(): Promise<void> {
         const templateName = dom.templateSelect.value;
         const name = files.nextBotName(templateName);
         const source = await templates.loadTemplate(templateName);
-        stopPlacementMode = startBotPlacementMode(name, source);
+        stopPlacementMode = startBotPlacementMode(placementDeps, name, source);
     });
 
     dom.runBtn.addEventListener('click', async () => {
@@ -147,7 +154,7 @@ export async function bootstrap(): Promise<void> {
             return;
         }
         selectedRobotName = updated.name;
-        renderPreview(files.getRobotInfos(), files.getPreviewPlacements(), files.getColorOverrides());
+        renderPreview(files.getRobotInfos(), files.getPreviewPlacements());
         updateSelectedRobotPanel();
     });
     dom.robotTeamSelect.addEventListener('change', () => {
@@ -170,21 +177,7 @@ export async function bootstrap(): Promise<void> {
                 heading: beforeTeamChange.heading,
             });
         }
-        renderPreview(files.getRobotInfos(), files.getPreviewPlacements(), files.getColorOverrides());
-        updateSelectedRobotPanel();
-    });
-    dom.robotColorInput.addEventListener('input', () => {
-        if (replayData || !selectedRobotFileName) {
-            return;
-        }
-        const updated = files.updateRobotMeta(selectedRobotFileName, {
-            color: dom.robotColorInput.value,
-        });
-        if (!updated) {
-            return;
-        }
-        selectedRobotName = updated.name;
-        renderPreview(files.getRobotInfos(), files.getPreviewPlacements(), files.getColorOverrides());
+        renderPreview(files.getRobotInfos(), files.getPreviewPlacements());
         updateSelectedRobotPanel();
     });
 
@@ -236,10 +229,8 @@ export async function bootstrap(): Promise<void> {
         const editable = replayData === null;
         dom.robotNameInput.disabled = !editable;
         dom.robotTeamSelect.disabled = !editable;
-        dom.robotColorInput.disabled = !editable;
         dom.robotNameInput.value = meta.name;
         dom.robotTeamSelect.value = String(meta.team);
-        dom.robotColorInput.value = meta.color ?? robotInfo.colorHex;
         dom.robotPositionValue.textContent = `${robotInfo.x.toFixed(1)}, ${robotInfo.y.toFixed(1)}`;
         dom.robotStatusValue.textContent = robotInfo.alive
             ? `Alive - ${robotInfo.heading.toFixed(0)}deg`
@@ -301,32 +292,6 @@ export async function bootstrap(): Promise<void> {
         clearSelectedRobot();
     }
 
-    async function onThemeChanged(): Promise<void> {
-        stopPlacementMode?.();
-        stopPlacementMode = null;
-        replay.stop();
-
-        if (!replayData) {
-            await refreshArenaPreview();
-            return;
-        }
-
-        const currentFrameIndex = replay.getCurrentFrameIndex();
-        const viewState = getArenaViewState();
-        destroy();
-        dom.arenaContainer.innerHTML = '';
-        dom.arenaOverlay.classList.add('hidden');
-        await initArena(
-            dom.arenaContainer,
-            replayData.arenaWidth,
-            replayData.arenaHeight,
-            replayData.robotInfos,
-            viewState,
-            files.getColorOverrides(),
-        );
-        replay.showFrame(currentFrameIndex);
-    }
-
     async function refreshArenaPreview(): Promise<void> {
         if (replayData) {
             return;
@@ -337,8 +302,8 @@ export async function bootstrap(): Promise<void> {
         destroy();
         dom.arenaContainer.innerHTML = '';
         dom.arenaOverlay.classList.add('hidden');
-        await initArena(dom.arenaContainer, 1200, 800, robotInfos, viewState, files.getColorOverrides());
-        renderPreview(robotInfos, files.getPreviewPlacements(), files.getColorOverrides());
+        await initArena(dom.arenaContainer, ARENA_WIDTH, ARENA_HEIGHT, robotInfos, viewState);
+        renderPreview(robotInfos, files.getPreviewPlacements());
         updateSimulationUiState();
     }
 
@@ -352,7 +317,6 @@ export async function bootstrap(): Promise<void> {
         renderPreview(
             files.getRobotInfos(),
             files.getPreviewPlacements(),
-            files.getColorOverrides(),
         );
         dom.arenaOverlay.classList.add('hidden');
         updateSimulationUiState();
@@ -399,6 +363,7 @@ export async function bootstrap(): Promise<void> {
                 robotInfos: replayPayload.robots,
                 arenaWidth: replayPayload.arena.width,
                 arenaHeight: replayPayload.arena.height,
+                playerTeam: files.getRobotMeta('my-bot.ts')?.team ?? null,
                 winnerTeam: result.winner_team ?? null,
                 totalTicks: result.total_ticks ?? replayPayload.ticks.length,
             };
@@ -415,7 +380,6 @@ export async function bootstrap(): Promise<void> {
                 replayPayload.arena.height,
                 replayPayload.robots,
                 viewState,
-                files.getColorOverrides(),
             );
 
             logs.append(
@@ -448,117 +412,7 @@ export async function bootstrap(): Promise<void> {
         return clamped;
     }
 
-    function startBotPlacementMode(filename: string, source: string): () => void {
-        const pendingName = filename.replace('.ts', '');
-        const baseRobotInfos = files.getRobotInfos();
-        const pendingRobotInfo = { name: pendingName, team: 1 };
-        let pendingPlacement: { x: number; y: number; heading: number } | null = null;
-
-        dom.addBotBtn.disabled = true;
-        dom.templateSelect.disabled = true;
-        dom.arenaContainer.style.cursor = 'crosshair';
-        dom.arenaOverlay.textContent = `Click in arena to place ${filename} (Esc to cancel)`;
-        dom.arenaOverlay.classList.remove('hidden');
-
-        const renderPendingPreview = (): void => {
-            const placements = files.getPreviewPlacements();
-            if (pendingPlacement) {
-                placements[pendingName] = pendingPlacement;
-                renderPreview([...baseRobotInfos, pendingRobotInfo], placements, files.getColorOverrides());
-                return;
-            }
-            renderPreview(baseRobotInfos, placements, files.getColorOverrides());
-        };
-
-        const cleanup = (restorePreview = true): void => {
-            document.removeEventListener('mousedown', onMouseDown, true);
-            document.removeEventListener('mousemove', onMouseMove, true);
-            document.removeEventListener('keydown', onKeyDown, true);
-            dom.arenaContainer.style.cursor = '';
-            dom.addBotBtn.disabled = false;
-            dom.templateSelect.disabled = false;
-                dom.arenaOverlay.classList.add('hidden');
-                if (restorePreview) {
-                    renderPreview(
-                        files.getRobotInfos(),
-                        files.getPreviewPlacements(),
-                        files.getColorOverrides(),
-                    );
-                }
-            };
-
-        const commitPlacement = (spawnX: number, spawnY: number): void => {
-            files.setFile(filename, source);
-            files.setPlacement(filename, {
-                x: spawnX,
-                y: spawnY,
-                heading: ENEMY_HEADING,
-            });
-            replayData = null;
-            replay.clearReplay();
-            files.switchToFile(filename);
-            cleanup(false);
-            renderPreview(
-                files.getRobotInfos(),
-                files.getPreviewPlacements(),
-                files.getColorOverrides(),
-            );
-            updateSimulationUiState();
-            stopPlacementMode = null;
-        };
-
-        const onMouseMove = (event: MouseEvent): void => {
-            const spawn = worldPositionFromClient(event.clientX, event.clientY);
-            if (!spawn) {
-                if (pendingPlacement) {
-                    pendingPlacement = null;
-                    renderPendingPreview();
-                }
-                return;
-            }
-            pendingPlacement = {
-                x: spawn.x,
-                y: spawn.y,
-                heading: ENEMY_HEADING,
-            };
-            renderPendingPreview();
-        };
-
-        const onMouseDown = (event: MouseEvent): void => {
-            if (event.button !== 0) {
-                return;
-            }
-            const spawn = worldPositionFromClient(event.clientX, event.clientY);
-            if (!spawn) {
-                if (pendingPlacement) {
-                    pendingPlacement = null;
-                    renderPendingPreview();
-                }
-                return;
-            }
-
-            event.preventDefault();
-            event.stopPropagation();
-            commitPlacement(spawn.x, spawn.y);
-        };
-
-        const onKeyDown = (event: KeyboardEvent): void => {
-            if (event.key !== 'Escape') {
-                return;
-            }
-            cleanup();
-            stopPlacementMode = null;
-        };
-
-        renderPendingPreview();
-        document.addEventListener('mousedown', onMouseDown, true);
-        document.addEventListener('mousemove', onMouseMove, true);
-        document.addEventListener('keydown', onKeyDown, true);
-        return cleanup;
-    }
-
     try {
-        themes.init();
         editor.create();
         const playerSource = await templates.loadPlayerTemplate();
         files.setFile('my-bot.ts', playerSource);
