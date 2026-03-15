@@ -19,6 +19,7 @@ export const dom = {
     robotTeamSelect: requiredEl<HTMLSelectElement>('robot-team-select'),
     robotPositionValue: requiredEl<HTMLSpanElement>('robot-position-value'),
     robotStatusValue: requiredEl<HTMLSpanElement>('robot-status-value'),
+    robotHeadingValue: requiredEl<HTMLSpanElement>('robot-heading-value'),
     pageLoadingCover: requiredEl<HTMLDivElement>('page-loading-cover'),
     sceneLoadingCover: requiredEl<HTMLDivElement>('scene-loading-cover'),
     cmContainer: requiredEl<HTMLDivElement>('codemirror-container'),

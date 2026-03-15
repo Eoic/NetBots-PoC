@@ -40,6 +40,7 @@ function wait(ms: number): Promise<void> {
 async function ensureMinDuration(startedAt: number, minDurationMs: number): Promise<void> {
     const elapsed = performance.now() - startedAt;
     const remaining = minDurationMs - elapsed;
+
     if (remaining > 0) {
         await wait(remaining);
     }
@@ -51,6 +52,7 @@ export async function bootstrap(): Promise<void> {
     const templates = new TemplateLoader();
     let replayData: ReplayData | null = null;
     let replay: ReplayController;
+
     const logs = new LogPanel(dom.logsContainer, {
         onTickSelected: (tickIndex) => {
             replay.showFrame(tickIndex);
@@ -90,6 +92,7 @@ export async function bootstrap(): Promise<void> {
         },
         canDeleteEnemyBots: () => replayData === null,
     });
+
     let stopPlacementMode: (() => void) | null = null;
     let selectedRobotFileName: string | null = null;
     let selectedRobotName: string | null = null;
@@ -100,6 +103,7 @@ export async function bootstrap(): Promise<void> {
         fileTreeEl: dom.fileTreeEl,
         logsContainer: dom.logsContainer,
     });
+
     setupEditorResize({
         resizeHandle: dom.resizeHandle,
         arenaPanel: dom.arenaPanel,
@@ -131,6 +135,7 @@ export async function bootstrap(): Promise<void> {
         pauseViewportDrag,
         resumeViewportDrag,
     };
+
     const manipulation = setupManipulation(manipulationDeps);
 
     dom.addBotBtn.addEventListener('click', async () => {
@@ -152,45 +157,60 @@ export async function bootstrap(): Promise<void> {
     dom.runBtn.addEventListener('click', async () => {
         await runGame();
     });
+
     dom.clearSimulationBtn.addEventListener('click', () => {
         clearActiveSimulation();
     });
+
     dom.arenaContainer.addEventListener('click', (event) => {
         handleArenaClick(event);
     });
+
     document.addEventListener('mousedown', (event) => {
         handleGlobalPointerDown(event);
     });
+
     document.addEventListener('keydown', (event) => {
         handleGlobalKeyDown(event);
     });
+
     dom.robotNameInput.addEventListener('change', () => {
         if (replayData || !selectedRobotFileName) {
             return;
         }
+
         const updated = files.updateRobotMeta(selectedRobotFileName, {
             name: dom.robotNameInput.value,
         });
+
         if (!updated) {
             return;
         }
+
         selectedRobotName = updated.name;
         renderPreview(files.getRobotInfos(), files.getPreviewPlacements());
         updateSelectedRobotPanel();
     });
+
     dom.robotTeamSelect.addEventListener('change', () => {
         if (replayData || !selectedRobotFileName) {
             return;
         }
+
         const beforeTeamChange = selectedRobotName
             ? getRobotSceneInfo(selectedRobotName, currentRobotInfos())
             : null;
+
         const team = Number.parseInt(dom.robotTeamSelect.value, 10);
+
         const updated = files.updateRobotMeta(selectedRobotFileName, { team });
+
         if (!updated) {
             return;
         }
+
         selectedRobotName = updated.name;
+
         if (beforeTeamChange) {
             files.setPlacement(selectedRobotFileName, {
                 x: beforeTeamChange.x,
@@ -198,6 +218,7 @@ export async function bootstrap(): Promise<void> {
                 heading: beforeTeamChange.heading,
             });
         }
+
         renderPreview(files.getRobotInfos(), files.getPreviewPlacements());
         updateSelectedRobotPanel();
     });
@@ -231,12 +252,14 @@ export async function bootstrap(): Promise<void> {
         const robotInfos = currentRobotInfos();
         const robotInfo = getRobotSceneInfo(selectedRobotName, robotInfos);
         const fileName = files.findFileByRobotName(selectedRobotName);
+
         if (!robotInfo || !fileName) {
             clearSelectedRobot();
             return;
         }
 
         const meta = files.getRobotMeta(fileName);
+
         if (!meta) {
             clearSelectedRobot();
             return;
@@ -252,10 +275,9 @@ export async function bootstrap(): Promise<void> {
         dom.robotTeamSelect.disabled = !editable;
         dom.robotNameInput.value = meta.name;
         dom.robotTeamSelect.value = String(meta.team);
-        dom.robotPositionValue.textContent = `${robotInfo.x.toFixed(1)}, ${robotInfo.y.toFixed(1)}`;
-        dom.robotStatusValue.textContent = robotInfo.alive
-            ? `Alive - ${robotInfo.heading.toFixed(0)}deg`
-            : `Dead - ${robotInfo.heading.toFixed(0)}deg`;
+        dom.robotPositionValue.textContent = `(${robotInfo.x.toFixed(1)}, ${robotInfo.y.toFixed(1)})`;
+        dom.robotStatusValue.textContent = robotInfo.alive ? 'Alive' : 'Dead';
+        dom.robotHeadingValue.textContent = `${robotInfo.heading.toFixed(0)} deg`;
         dom.robotInspector.classList.remove('hidden');
     }
 
@@ -290,6 +312,7 @@ export async function bootstrap(): Promise<void> {
         }
 
         const target = event.target;
+
         if (target instanceof Element && dom.robotInspector.contains(target)) {
             return;
         }
@@ -299,6 +322,7 @@ export async function bootstrap(): Promise<void> {
             event.clientY,
             currentRobotInfos(),
         );
+
         if (pickedRobotName) {
             return;
         }

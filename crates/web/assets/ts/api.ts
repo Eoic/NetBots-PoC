@@ -41,11 +41,11 @@ export async function runSimulation(
     robots: RobotPayload[],
     maxTicks: number,
 ): Promise<SimulationResponse> {
-    const resp = await fetch('/api/run', {
+    const response = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ robots, max_ticks: maxTicks }),
     });
 
-    return resp.json() as Promise<SimulationResponse>;
+    return response.json() as Promise<SimulationResponse>;
 }
