@@ -1,12 +1,18 @@
-export interface RobotPayload {
+export interface RobotEntrypoint {
     name: string;
-    source: string;
+    file: string;    // path into files map
     team: number;
     spawn?: {
         x: number;
         y: number;
         heading?: number;
     };
+}
+
+export interface RunRequest {
+    files: Record<string, string>;  // all files in the virtual FS
+    robots: RobotEntrypoint[];
+    max_ticks: number;
 }
 
 export interface SimulationResponse {
@@ -38,13 +44,12 @@ export interface SimulationResponse {
 }
 
 export async function runSimulation(
-    robots: RobotPayload[],
-    maxTicks: number,
+    request: RunRequest,
 ): Promise<SimulationResponse> {
     const response = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ robots, max_ticks: maxTicks }),
+        body: JSON.stringify(request),
     });
 
     return response.json() as Promise<SimulationResponse>;

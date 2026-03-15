@@ -1,22 +1,26 @@
+use std::collections::HashMap;
+
 use axum::http::StatusCode;
 use axum::response::Json;
-use std::collections::HashSet;
 
 use crate::routes::{error_response, RunRequest, RunResponse, SpawnPointRequest};
 
 const MAX_ROBOTS: usize = 16;
-const MAX_SOURCE_BYTES: usize = 64 * 1024;
+const MAX_FILES: usize = 50;
+const MAX_TOTAL_SIZE: usize = 512 * 1024;
+const MAX_FILE_SIZE: usize = 64 * 1024;
 const MAX_ALLOWED_TICKS: u32 = 100_000;
 
 pub struct ValidatedRobot {
     pub name: String,
-    pub source: String,
+    pub file: String,
     pub team: u8,
     pub spawn: Option<engine::world::SpawnPoint>,
 }
 
 pub struct ValidatedRequest {
     pub robots: Vec<ValidatedRobot>,
+    pub files: HashMap<String, String>,
     pub max_ticks: u32,
 }
 
@@ -24,6 +28,52 @@ pub struct ValidatedRequest {
 pub fn validate_run_request(
     req: &RunRequest,
 ) -> Result<ValidatedRequest, (StatusCode, Json<RunResponse>)> {
+    // Validate files map
+    if req.files.is_empty() {
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            "No files provided",
+        ));
+    }
+
+    if req.files.len() > MAX_FILES {
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            &format!("Too many files (max {})", MAX_FILES),
+        ));
+    }
+
+    let mut total_size: usize = 0;
+    for (path, content) in &req.files {
+        if let Err(msg) = validate_file_path(path) {
+            return Err(error_response(StatusCode::BAD_REQUEST, &msg));
+        }
+
+        if content.len() > MAX_FILE_SIZE {
+            return Err(error_response(
+                StatusCode::BAD_REQUEST,
+                &format!(
+                    "File '{}' exceeds {} KB limit",
+                    path,
+                    MAX_FILE_SIZE / 1024
+                ),
+            ));
+        }
+
+        total_size += content.len();
+    }
+
+    if total_size > MAX_TOTAL_SIZE {
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            &format!(
+                "Total file size exceeds {} KB limit",
+                MAX_TOTAL_SIZE / 1024
+            ),
+        ));
+    }
+
+    // Validate robots
     if req.robots.is_empty() {
         return Err(error_response(
             StatusCode::BAD_REQUEST,
@@ -38,8 +88,6 @@ pub fn validate_run_request(
         ));
     }
 
-    let mut teams_in_match: HashSet<u8> = HashSet::new();
-
     for entry in &req.robots {
         if entry.team >= engine::world::MAX_TEAMS {
             return Err(error_response(
@@ -52,15 +100,12 @@ pub fn validate_run_request(
             ));
         }
 
-        teams_in_match.insert(entry.team);
-
-        if entry.source.len() > MAX_SOURCE_BYTES {
+        if !req.files.contains_key(&entry.file) {
             return Err(error_response(
                 StatusCode::BAD_REQUEST,
                 &format!(
-                    "Source for '{}' exceeds {} KB limit",
-                    entry.name,
-                    MAX_SOURCE_BYTES / 1024
+                    "Entrypoint '{}' for robot '{}' not found in files",
+                    entry.file, entry.name
                 ),
             ));
         }
@@ -70,16 +115,7 @@ pub fn validate_run_request(
         }
     }
 
-    if teams_in_match.len() > engine::world::MAX_TEAMS as usize {
-        return Err(error_response(
-            StatusCode::BAD_REQUEST,
-            &format!(
-                "Too many teams in a single match (max {})",
-                engine::world::MAX_TEAMS
-            ),
-        ));
-    }
-
+    // Validate ticks
     let max_ticks = req.max_ticks.unwrap_or(engine::world::MAX_TICKS);
 
     if max_ticks == 0 {
@@ -101,7 +137,7 @@ pub fn validate_run_request(
         .iter()
         .map(|entry| ValidatedRobot {
             name: entry.name.clone(),
-            source: entry.source.clone(),
+            file: entry.file.clone(),
             team: entry.team,
             spawn: entry.spawn.as_ref().map(|s| engine::world::SpawnPoint {
                 x: s.x,
@@ -111,7 +147,30 @@ pub fn validate_run_request(
         })
         .collect();
 
-    Ok(ValidatedRequest { robots, max_ticks })
+    Ok(ValidatedRequest {
+        robots,
+        files: req.files.clone(),
+        max_ticks,
+    })
+}
+
+fn validate_file_path(path: &str) -> Result<(), String> {
+    if path.is_empty() {
+        return Err("Empty file path".to_string());
+    }
+    if path.starts_with('/') {
+        return Err(format!("Absolute path not allowed: {}", path));
+    }
+    if path.contains('\0') {
+        return Err(format!("Null byte in path: {}", path));
+    }
+    if path.split('/').any(|seg| seg == "..") {
+        return Err(format!("Path traversal not allowed: {}", path));
+    }
+    if path.contains("//") || path.ends_with('/') {
+        return Err(format!("Invalid path segments: {}", path));
+    }
+    Ok(())
 }
 
 #[allow(clippy::result_large_err)]

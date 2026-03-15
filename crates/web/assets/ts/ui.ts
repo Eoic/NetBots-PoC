@@ -1,7 +1,7 @@
 interface TabControls {
     tabBtns: HTMLButtonElement[];
     cmContainer: HTMLDivElement;
-    fileTreeEl: HTMLDivElement;
+    fileTreePanel: HTMLElement;
     logsContainer: HTMLPreElement;
 }
 
@@ -13,7 +13,7 @@ export function setupTabs(controls: TabControls): void {
 
             const tab = btn.dataset.tab;
             controls.cmContainer.classList.toggle('hidden', tab !== 'code');
-            controls.fileTreeEl.classList.toggle('hidden', tab !== 'code');
+            controls.fileTreePanel.classList.toggle('hidden', tab !== 'code');
             controls.logsContainer.classList.toggle('hidden', tab !== 'logs');
         });
     });
@@ -37,10 +37,7 @@ export function setupEditorResize(controls: ResizeControls): void {
 
     const clampEditorHeight = (): void => {
         const arenaRect = controls.arenaPanel.getBoundingClientRect();
-
-        if (arenaRect.height <= 0) {
-            return;
-        }
+        if (arenaRect.height <= 0) return;
 
         const minHeight = getHandleCenterOffset();
         const maxHeight = arenaRect.height;
@@ -84,4 +81,69 @@ export function setupEditorResize(controls: ResizeControls): void {
     window.addEventListener('resize', clampEditorHeight);
     window.visualViewport?.addEventListener('resize', clampEditorHeight);
     clampEditorHeight();
+}
+
+interface FileTreeResizeControls {
+    fileTreePanel: HTMLElement;
+}
+
+const EDGE_GRAB_ZONE = 4;
+const MIN_PANEL_WIDTH = 80;
+const MAX_PANEL_WIDTH_RATIO = 0.5;
+
+export function setupFileTreeResize(controls: FileTreeResizeControls): void {
+    const panel = controls.fileTreePanel;
+    const parent = panel.parentElement!;
+    let isResizing = false;
+
+    const isNearRightEdge = (e: MouseEvent): boolean => {
+        const rect = panel.getBoundingClientRect();
+        return e.clientX >= rect.right - EDGE_GRAB_ZONE && e.clientX <= rect.right + EDGE_GRAB_ZONE;
+    };
+
+    parent.addEventListener('mousemove', (e) => {
+        if (isResizing) return;
+
+        const near = isNearRightEdge(e);
+        panel.classList.toggle('resize-hover', near);
+        parent.style.cursor = near ? 'col-resize' : '';
+    });
+
+    parent.addEventListener('mouseleave', () => {
+        if (isResizing) return;
+
+        panel.classList.remove('resize-hover');
+        parent.style.cursor = '';
+    });
+
+    parent.addEventListener('mousedown', (e) => {
+        if (!isNearRightEdge(e)) return;
+
+        isResizing = true;
+        panel.classList.remove('resize-hover');
+        panel.classList.add('is-resizing');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+
+        const panelRect = panel.getBoundingClientRect();
+        const newWidth = e.clientX - panelRect.left;
+        const maxWidth = parent.getBoundingClientRect().width * MAX_PANEL_WIDTH_RATIO;
+        const clamped = Math.max(MIN_PANEL_WIDTH, Math.min(newWidth, maxWidth));
+        panel.style.width = `${clamped}px`;
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!isResizing) return;
+
+        isResizing = false;
+        panel.classList.remove('is-resizing');
+        parent.style.cursor = '';
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    });
 }

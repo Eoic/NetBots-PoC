@@ -1,6 +1,8 @@
-import type { RobotPayload } from './api';
+import type { RunRequest } from './api';
+import { ContextMenu, type ContextMenuItem } from './context-menu';
 import { CodeEditor } from './editor';
 import type { RobotInfo } from './renderer';
+import { buildTree, basename, dirname, joinPath, isDescendant, type TreeNode } from './virtual-fs';
 
 export interface RobotPlacement {
     x: number;
@@ -33,38 +35,146 @@ const DEFAULT_HEADING = 0;
 const DEFAULT_PLACEMENT_COLS = 4;
 const DEFAULT_PLACEMENT_STEP_X = 120;
 const DEFAULT_PLACEMENT_STEP_Y = 100;
+const DRAG_MIME_TYPE = 'text/x-tree-path';
+
+function createIcon(iconClass: string): HTMLElement {
+    const i = document.createElement('i');
+    i.className = iconClass;
+    i.setAttribute('aria-hidden', 'true');
+    return i;
+}
+
+function remapSet(set: Set<string>, oldPrefix: string, newPrefix: string): void {
+    const toMove: [string, string][] = [];
+
+    for (const entry of set) {
+        if (entry === oldPrefix || isDescendant(oldPrefix, entry)) {
+            toMove.push([entry, newPrefix + entry.slice(oldPrefix.length)]);
+        }
+    }
+
+    for (const [oldVal, newVal] of toMove) {
+        set.delete(oldVal);
+        set.add(newVal);
+    }
+}
 
 export class FileStore {
     private readonly files = new Map<string, string>();
     private readonly placements = new Map<string, RobotPlacement>();
     private readonly robotMeta = new Map<string, RobotMeta>();
+    private readonly entrypoints = new Set<string>();
+    private readonly emptyDirs = new Set<string>();
+    private readonly collapsedDirs = new Set<string>();
+    private readonly contextMenu = new ContextMenu();
     private activeFile: string | null = null;
+    private dragGhost: HTMLElement | null = null;
+    private dragOffsetX = 0;
+    private dragOffsetY = 0;
 
-    constructor(private readonly options: FileStoreOptions) { }
+    constructor(private readonly options: FileStoreOptions) {
+        this.options.fileTreeEl.addEventListener('contextmenu', (e) => {
+            const target = e.target as HTMLElement;
+            const row = target.closest('.tree-row') as HTMLElement | null;
+
+            if (!row) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.showEmptyAreaContextMenu(e.clientX, e.clientY);
+            }
+        });
+
+        this.setupDropOnRoot();
+    }
+
+    // --- File CRUD ---
 
     setFile(name: string, source: string): void {
         this.files.set(name, source);
-        this.getOrCreateMeta(name);
-        this.ensurePlacement(name);
+
+        if (this.isEntrypoint(name)) {
+            this.getOrCreateMeta(name);
+            this.ensurePlacement(name);
+        }
     }
 
-    setPlacement(name: string, placement: RobotPlacement): void {
-        if (!this.files.has(name)) {
-            return;
+    createFile(path: string, content: string = ''): void {
+        this.files.set(path, content);
+
+        const parent = dirname(path);
+        if (parent) {
+            this.emptyDirs.delete(parent);
         }
 
+        this.renderFileTree();
+    }
+
+    createDirectory(path: string): void {
+        this.emptyDirs.add(path);
+        this.renderFileTree();
+    }
+
+    renamePath(oldPath: string, newPath: string): void {
+        if (oldPath === newPath) return;
+
+        if (this.files.has(oldPath)) {
+            this.renameFile(oldPath, newPath);
+        } else {
+            this.renameDirectory(oldPath, newPath);
+        }
+
+        this.renderFileTree();
+        this.notifyFilesChanged();
+    }
+
+    deletePath(path: string): void {
+        if (this.files.has(path)) {
+            this.deleteFile(path);
+        } else {
+            this.deleteDirectory(path);
+        }
+    }
+
+    // --- Entrypoint management ---
+
+    markEntrypoint(path: string): void {
+        if (!this.files.has(path)) return;
+
+        this.entrypoints.add(path);
+        this.getOrCreateMeta(path);
+        this.ensurePlacement(path);
+        this.renderFileTree();
+        this.notifyFilesChanged();
+    }
+
+    unmarkEntrypoint(path: string): void {
+        this.entrypoints.delete(path);
+        this.clearMetadata(path);
+        this.renderFileTree();
+        this.notifyFilesChanged();
+    }
+
+    isEntrypoint(path: string): boolean {
+        return this.entrypoints.has(path);
+    }
+
+    // --- Placement & meta ---
+
+    setPlacement(name: string, placement: RobotPlacement): void {
+        if (!this.files.has(name)) return;
         this.placements.set(name, placement);
     }
 
     getPreviewPlacements(): Record<string, RobotPlacement> {
-        for (const [name] of this.files) {
-            this.ensurePlacement(name);
+        for (const path of this.entrypoints) {
+            this.ensurePlacement(path);
         }
 
         const placements: Record<string, RobotPlacement> = {};
 
-        for (const [name, placement] of this.placements) {
-            const meta = this.getOrCreateMeta(name);
+        for (const [path, placement] of this.placements) {
+            if (!this.entrypoints.has(path)) continue;
+            const meta = this.getOrCreateMeta(path);
             placements[meta.name] = placement;
         }
 
@@ -73,28 +183,20 @@ export class FileStore {
 
     findFileByRobotName(robotName: string): string | null {
         for (const [fileName, meta] of this.robotMeta) {
-            if (!this.files.has(fileName)) {
-                continue;
-            }
-
-            if (meta.name === robotName) {
-                return fileName;
-            }
+            if (!this.files.has(fileName) || !this.entrypoints.has(fileName)) continue;
+            if (meta.name === robotName) return fileName;
         }
 
         return null;
     }
 
     getRobotMeta(fileName: string): EditableRobotMeta | null {
-        if (!this.files.has(fileName)) {
-            return null;
-        }
+        if (!this.files.has(fileName)) return null;
 
         const meta = this.getOrCreateMeta(fileName);
-
         return {
             fileName,
-            isPlayer: this.isPlayerFile(fileName),
+            isPlayer: this.isFirstEntrypoint(fileName),
             name: meta.name,
             team: meta.team,
         };
@@ -104,9 +206,7 @@ export class FileStore {
         fileName: string,
         updates: { name?: string; team?: number },
     ): EditableRobotMeta | null {
-        if (!this.files.has(fileName)) {
-            return null;
-        }
+        if (!this.files.has(fileName)) return null;
 
         const current = this.getOrCreateMeta(fileName);
 
@@ -118,14 +218,12 @@ export class FileStore {
             ? current.team
             : Math.max(0, Math.min(MAX_TEAMS - 1, updates.team));
 
-        this.robotMeta.set(fileName, {
-            name: nextName,
-            team: nextTeam,
-        });
-
+        this.robotMeta.set(fileName, { name: nextName, team: nextTeam });
         this.renderFileTree();
         return this.getRobotMeta(fileName);
     }
+
+    // --- Editor integration ---
 
     saveCurrentFile(): void {
         if (this.activeFile && this.files.has(this.activeFile)) {
@@ -134,125 +232,723 @@ export class FileStore {
     }
 
     switchToFile(filename: string): void {
+        if (!this.files.has(filename) || filename === this.activeFile) return;
+
         this.saveCurrentFile();
         this.activeFile = filename;
-        this.options.editor.setContent(this.files.get(filename) || '');
+        this.options.editor.setContent(this.files.get(filename) || '', filename);
         this.renderFileTree();
     }
 
-    renderFileTree(): void {
-        this.options.fileTreeEl.innerHTML = '';
-
-        for (const [name] of this.files) {
-            const div = document.createElement('div');
-            const isPlayer = name === 'my-bot.ts';
-            const team = this.getOrCreateMeta(name).team;
-            div.className = `file-item file-team-${team}${name === this.activeFile ? ' active' : ''}`;
-            div.style.setProperty('--file-team-color', `var(--nb-pixi-team-${team})`);
-
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'file-name';
-            nameSpan.textContent = name;
-            div.appendChild(nameSpan);
-
-            if (!isPlayer) {
-                const canDelete = this.options.canDeleteEnemyBots();
-                const del = document.createElement('span');
-                del.className = `file-delete${canDelete ? '' : ' disabled'}`;
-
-                if (!canDelete) {
-                    del.title = 'Clear simulation before removing bots';
-                }
-
-                del.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
-
-                del.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (!this.options.canDeleteEnemyBots()) {
-                        return;
-                    }
-                    this.deleteFile(name);
-                });
-
-                div.appendChild(del);
-            }
-
-            div.addEventListener('click', () => this.switchToFile(name));
-            this.options.fileTreeEl.appendChild(div);
-        }
-    }
+    // --- Data access ---
 
     getRobotInfos(): RobotInfo[] {
         const infos: RobotInfo[] = [];
 
-        for (const [name] of this.files) {
-            const meta = this.getOrCreateMeta(name);
-
-            infos.push({
-                name: meta.name,
-                team: meta.team,
-            });
+        for (const path of this.entrypoints) {
+            if (!this.files.has(path)) continue;
+            const meta = this.getOrCreateMeta(path);
+            infos.push({ name: meta.name, team: meta.team });
         }
 
         return infos;
     }
 
-    toRobotPayloads(): RobotPayload[] {
+    toRunRequest(maxTicks: number): RunRequest {
         this.saveCurrentFile();
-        const robots: RobotPayload[] = [];
 
-        for (const [name, source] of this.files) {
-            const meta = this.getOrCreateMeta(name);
+        const files: Record<string, string> = {};
+        for (const [path, content] of this.files) {
+            files[path] = content;
+        }
 
+        const robots = [];
+        for (const path of this.entrypoints) {
+            if (!this.files.has(path)) continue;
+
+            const meta = this.getOrCreateMeta(path);
             robots.push({
                 name: meta.name,
-                source,
+                file: path,
                 team: meta.team,
-                spawn: this.placements.get(name),
+                spawn: this.placements.get(path),
             });
         }
 
-        return robots;
+        return { files, robots, max_ticks: maxTicks };
     }
 
     nextBotName(templateName: string): string {
         let count = 1;
-
-        while (this.files.has(`${templateName}-${count}.ts`))
-            count++;
-
+        while (this.files.has(`${templateName}-${count}.ts`)) count++;
         return `${templateName}-${count}.ts`;
     }
 
-    private deleteFile(name: string): void {
-        this.files.delete(name);
-        this.placements.delete(name);
-        this.robotMeta.delete(name);
+    // --- Tree rendering ---
 
-        if (this.activeFile === name) {
-            this.switchToFile('my-bot.ts');
-        } else {
-            this.renderFileTree();
+    renderFileTree(): void {
+        const el = this.options.fileTreeEl;
+        el.textContent = '';
+
+        const tree = buildTree(this.files, this.emptyDirs, this.entrypoints);
+        for (const node of tree) {
+            el.appendChild(this.renderNode(node, 0));
         }
 
+        const emptyArea = document.createElement('div');
+        emptyArea.className = 'tree-empty-area';
+        emptyArea.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showEmptyAreaContextMenu(e.clientX, e.clientY);
+        });
+        el.appendChild(emptyArea);
+    }
+
+    promptNewFileAtRoot(): void {
+        this.promptNewFile('');
+    }
+
+    promptNewFolderAtRoot(): void {
+        this.promptNewFolder('');
+    }
+
+    // --- Private: file/directory operations ---
+
+    private renameFile(oldPath: string, newPath: string): void {
+        const content = this.files.get(oldPath)!;
+        this.files.delete(oldPath);
+        this.files.set(newPath, content);
+
+        if (this.placements.has(oldPath)) {
+            this.placements.set(newPath, this.placements.get(oldPath)!);
+            this.placements.delete(oldPath);
+        }
+
+        if (this.robotMeta.has(oldPath)) {
+            const meta = this.robotMeta.get(oldPath)!;
+            this.robotMeta.delete(oldPath);
+            meta.name = this.getUniqueRobotName(newPath, this.deriveRobotName(newPath));
+            this.robotMeta.set(newPath, meta);
+        }
+
+        if (this.entrypoints.has(oldPath)) {
+            this.entrypoints.delete(oldPath);
+            this.entrypoints.add(newPath);
+        }
+
+        if (this.activeFile === oldPath) {
+            this.activeFile = newPath;
+        }
+    }
+
+    private renameDirectory(oldPath: string, newPath: string): void {
+        if (this.emptyDirs.has(oldPath)) {
+            this.emptyDirs.delete(oldPath);
+            this.emptyDirs.add(newPath);
+        }
+
+        const filesToMove: [string, string][] = [];
+        for (const [filePath] of this.files) {
+            if (filePath === oldPath || isDescendant(oldPath, filePath)) {
+                filesToMove.push([filePath, newPath + filePath.slice(oldPath.length)]);
+            }
+        }
+
+        for (const [oldFile, newFile] of filesToMove) {
+            this.renameFile(oldFile, newFile);
+        }
+
+        remapSet(this.emptyDirs, oldPath, newPath);
+        remapSet(this.collapsedDirs, oldPath, newPath);
+    }
+
+    private deleteFile(path: string): void {
+        this.files.delete(path);
+        this.clearMetadata(path);
+        this.entrypoints.delete(path);
+
+        if (this.activeFile === path) {
+            this.switchToFallbackFile();
+        }
+
+        this.renderFileTree();
+        this.notifyFilesChanged();
+    }
+
+    private deleteDirectory(path: string): void {
+        const pathsToDelete: string[] = [];
+        for (const [filePath] of this.files) {
+            if (isDescendant(path, filePath)) {
+                pathsToDelete.push(filePath);
+            }
+        }
+
+        for (const filePath of pathsToDelete) {
+            this.files.delete(filePath);
+            this.clearMetadata(filePath);
+            this.entrypoints.delete(filePath);
+        }
+
+        this.emptyDirs.delete(path);
+        for (const dir of this.emptyDirs) {
+            if (isDescendant(path, dir)) {
+                this.emptyDirs.delete(dir);
+            }
+        }
+        this.collapsedDirs.delete(path);
+
+        if (this.activeFile && !this.files.has(this.activeFile)) {
+            this.switchToFallbackFile();
+        }
+
+        this.renderFileTree();
+
+        if (pathsToDelete.length > 0) {
+            this.notifyFilesChanged();
+        }
+    }
+
+    private switchToFallbackFile(): void {
+        const fallback = this.getFirstEntrypoint() ?? this.files.keys().next().value ?? null;
+
+        if (fallback) {
+            this.switchToFile(fallback);
+        } else {
+            this.activeFile = null;
+        }
+    }
+
+    private clearMetadata(path: string): void {
+        this.placements.delete(path);
+        this.robotMeta.delete(path);
+    }
+
+    private notifyFilesChanged(): void {
         void Promise.resolve(this.options.onFilesChanged()).catch((err) => {
-            console.error('Failed to handle file deletion:', err);
+            console.error('onFilesChanged failed:', err);
         });
     }
 
-    private isPlayerFile(fileName: string): boolean {
-        return fileName === 'my-bot.ts';
+    // --- Private: tree node rendering ---
+
+    private renderNode(node: TreeNode, depth: number): HTMLElement {
+        const container = document.createElement('div');
+        container.className = 'tree-node';
+
+        const row = document.createElement('div');
+        row.className = `tree-row${node.path === this.activeFile ? ' active' : ''}`;
+        row.dataset.path = node.path;
+        row.style.setProperty('--depth', String(depth));
+
+        if (node.isDirectory) {
+            this.renderDirectoryRow(row, node);
+        } else {
+            this.renderFileRow(row, node);
+        }
+
+        container.appendChild(row);
+
+        if (node.isDirectory) {
+            const childrenEl = document.createElement('div');
+            childrenEl.className = `tree-children${this.collapsedDirs.has(node.path) ? ' collapsed' : ''}`;
+
+            for (const child of node.children) {
+                childrenEl.appendChild(this.renderNode(child, depth + 1));
+            }
+
+            container.appendChild(childrenEl);
+        }
+
+        return container;
+    }
+
+    private renderDirectoryRow(row: HTMLElement, node: TreeNode): void {
+        const isCollapsed = this.collapsedDirs.has(node.path);
+
+        row.dataset.dir = '';
+        this.setupDraggable(row, node);
+        this.setupDirectoryDropTarget(row, node);
+
+        const toggle = document.createElement('span');
+        toggle.className = `tree-toggle${isCollapsed ? ' collapsed' : ''}`;
+        toggle.appendChild(createIcon('fa-solid fa-chevron-down'));
+        row.appendChild(toggle);
+
+        const icon = document.createElement('span');
+        icon.className = 'tree-icon';
+        icon.appendChild(createIcon(`fa-solid ${isCollapsed ? 'fa-folder' : 'fa-folder-open'}`));
+        row.appendChild(icon);
+
+        const nameSpan = this.createNameSpan(row, node);
+        row.appendChild(nameSpan);
+
+        row.addEventListener('click', () => {
+            if (this.collapsedDirs.has(node.path)) {
+                this.collapsedDirs.delete(node.path);
+            } else {
+                this.collapsedDirs.add(node.path);
+            }
+
+            this.renderFileTree();
+        });
+
+        row.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showDirectoryContextMenu(e.clientX, e.clientY, node);
+        });
+    }
+
+    private renderFileRow(row: HTMLElement, node: TreeNode): void {
+        this.setupDraggable(row, node);
+
+        // Spacer for alignment with directory toggle
+        const spacer = document.createElement('span');
+        spacer.className = 'tree-toggle';
+        row.appendChild(spacer);
+
+        const icon = document.createElement('span');
+        icon.className = 'tree-icon';
+
+        if (node.isEntrypoint) {
+            const meta = this.getOrCreateMeta(node.path);
+            icon.appendChild(createIcon('fa-solid fa-robot'));
+            icon.style.color = `var(--nb-pixi-team-${meta.team})`;
+            row.style.setProperty('--file-team-color', `var(--nb-pixi-team-${meta.team})`);
+        } else {
+            icon.appendChild(createIcon('fa-solid fa-file-code'));
+        }
+
+        row.appendChild(icon);
+
+        const nameSpan = this.createNameSpan(row, node);
+        row.appendChild(nameSpan);
+
+        row.addEventListener('click', () => this.switchToFile(node.path));
+
+        row.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showFileContextMenu(e.clientX, e.clientY, node);
+        });
+    }
+
+    private createNameSpan(row: HTMLElement, node: TreeNode): HTMLSpanElement {
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'tree-name';
+        nameSpan.textContent = node.name;
+
+        nameSpan.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            this.startInlineRename(row, node, nameSpan);
+        });
+
+        return nameSpan;
+    }
+
+    // --- Private: context menus ---
+
+    private showFileContextMenu(x: number, y: number, node: TreeNode): void {
+        const items: ContextMenuItem[] = [
+            { label: 'Rename', action: () => this.promptRename(node) },
+        ];
+
+        if (node.isEntrypoint) {
+            items.push({
+                label: 'Unmark as Robot',
+                action: () => this.unmarkEntrypoint(node.path),
+            });
+        } else {
+            items.push({
+                label: 'Mark as Robot',
+                action: () => this.markEntrypoint(node.path),
+            });
+        }
+
+        if (!this.isFirstEntrypoint(node.path) && this.options.canDeleteEnemyBots()) {
+            items.push({
+                label: 'Delete',
+                action: () => this.deletePath(node.path),
+            });
+        }
+
+        this.contextMenu.show(x, y, items);
+    }
+
+    private showDirectoryContextMenu(x: number, y: number, node: TreeNode): void {
+        const items: ContextMenuItem[] = [
+            { label: 'New File', action: () => this.promptNewFile(node.path) },
+            { label: 'New Folder', action: () => this.promptNewFolder(node.path) },
+            { label: 'Rename', action: () => this.promptRename(node) },
+        ];
+
+        if (this.options.canDeleteEnemyBots()) {
+            items.push({
+                label: 'Delete',
+                action: () => this.deletePath(node.path),
+            });
+        }
+
+        this.contextMenu.show(x, y, items);
+    }
+
+    private showEmptyAreaContextMenu(x: number, y: number): void {
+        this.contextMenu.show(x, y, [
+            { label: 'New File', action: () => this.promptNewFile('') },
+            { label: 'New Folder', action: () => this.promptNewFolder('') },
+        ]);
+    }
+
+    // --- Private: inline rename & creation ---
+
+    private startInlineRename(row: HTMLElement, node: TreeNode, nameSpan: HTMLElement): void {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'tree-rename-input';
+        input.value = node.name;
+
+        nameSpan.replaceWith(input);
+        input.focus();
+
+        if (!node.isDirectory) {
+            const dotIndex = node.name.lastIndexOf('.');
+            input.setSelectionRange(0, dotIndex > 0 ? dotIndex : node.name.length);
+        } else {
+            input.select();
+        }
+
+        const commit = (): void => {
+            const newName = input.value.trim();
+            input.replaceWith(nameSpan);
+
+            if (!newName || newName === node.name) return;
+
+            const parent = dirname(node.path);
+            const newPath = parent ? joinPath(parent, newName) : newName;
+            this.renamePath(node.path, newPath);
+        };
+
+        const cancel = (): void => {
+            input.replaceWith(nameSpan);
+        };
+
+        input.addEventListener('blur', commit);
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                input.blur();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                input.removeEventListener('blur', commit);
+                cancel();
+            }
+        });
+    }
+
+    private promptRename(node: TreeNode): void {
+        this.renderFileTree();
+
+        const row = this.options.fileTreeEl.querySelector(
+            `.tree-row[data-path="${CSS.escape(node.path)}"]`,
+        ) as HTMLElement | null;
+        const nameEl = row?.querySelector('.tree-name') as HTMLElement | null;
+
+        if (row && nameEl) {
+            this.startInlineRename(row, node, nameEl);
+        }
+    }
+
+    private promptNewFile(parentDir: string): void {
+        this.showInlineCreationInput(parentDir, 'file');
+    }
+
+    private promptNewFolder(parentDir: string): void {
+        this.showInlineCreationInput(parentDir, 'directory');
+    }
+
+    private showInlineCreationInput(parentDir: string, kind: 'file' | 'directory'): void {
+        if (parentDir) {
+            this.collapsedDirs.delete(parentDir);
+            this.renderFileTree();
+        }
+
+        const depth = parentDir ? parentDir.split('/').length : 0;
+
+        const row = document.createElement('div');
+        row.className = 'tree-row';
+        row.style.setProperty('--depth', String(depth));
+
+        const spacer = document.createElement('span');
+        spacer.className = 'tree-toggle';
+        row.appendChild(spacer);
+
+        const icon = document.createElement('span');
+        icon.className = 'tree-icon';
+        icon.appendChild(createIcon(
+            kind === 'directory' ? 'fa-solid fa-folder' : 'fa-solid fa-file-code',
+        ));
+        row.appendChild(icon);
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'tree-rename-input';
+        input.placeholder = kind === 'directory' ? 'folder name' : 'file name';
+        row.appendChild(input);
+
+        const insertionPoint = this.findInsertionPoint(parentDir);
+        insertionPoint.container.insertBefore(row, insertionPoint.before);
+        input.focus();
+
+        let committed = false;
+
+        const commit = (): void => {
+            if (committed) return;
+            committed = true;
+
+            const name = input.value.trim();
+            row.remove();
+            if (!name) return;
+
+            const path = parentDir ? joinPath(parentDir, name) : name;
+
+            if (kind === 'directory') {
+                this.createDirectory(path);
+            } else {
+                this.createFile(path);
+                this.switchToFile(path);
+            }
+        };
+
+        const cancel = (): void => {
+            if (committed) return;
+            committed = true;
+            row.remove();
+        };
+
+        input.addEventListener('blur', commit);
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                input.blur();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                input.removeEventListener('blur', commit);
+                cancel();
+            }
+        });
+    }
+
+    private findInsertionPoint(parentDir: string): { container: HTMLElement; before: HTMLElement | null } {
+        const el = this.options.fileTreeEl;
+
+        if (!parentDir) {
+            const emptyArea = el.querySelector('.tree-empty-area');
+            return { container: el, before: emptyArea as HTMLElement | null };
+        }
+
+        const dirRow = el.querySelector(`.tree-row[data-path="${CSS.escape(parentDir)}"]`);
+
+        if (dirRow) {
+            const treeNode = dirRow.parentElement;
+            const childrenEl = treeNode?.querySelector(':scope > .tree-children') as HTMLElement | null;
+
+            if (childrenEl) {
+                return { container: childrenEl, before: null };
+            }
+        }
+
+        const emptyArea = el.querySelector('.tree-empty-area');
+        return { container: el, before: emptyArea as HTMLElement | null };
+    }
+
+    // --- Private: drag and drop ---
+
+    private setupDraggable(row: HTMLElement, node: TreeNode): void {
+        row.draggable = true;
+
+        row.addEventListener('dragstart', (e) => {
+            if (!e.dataTransfer) return;
+
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData(DRAG_MIME_TYPE, node.path);
+
+            const rect = row.getBoundingClientRect();
+            this.dragOffsetX = e.clientX - rect.left;
+            this.dragOffsetY = e.clientY - rect.top;
+
+            const blank = document.createElement('canvas');
+            blank.width = 1;
+            blank.height = 1;
+            e.dataTransfer.setDragImage(blank, 0, 0);
+
+            const ghost = row.cloneNode(true) as HTMLElement;
+            ghost.classList.remove('active');
+            ghost.className = 'tree-row drag-ghost';
+            ghost.style.width = `${row.offsetWidth}px`;
+            document.body.appendChild(ghost);
+            this.dragGhost = ghost;
+
+            row.classList.add('dragging');
+        });
+
+        row.addEventListener('drag', (e) => {
+            if (!this.dragGhost) return;
+
+            if (e.clientX === 0 && e.clientY === 0) {
+                this.dragGhost.style.display = 'none';
+                return;
+            }
+
+            this.dragGhost.style.display = '';
+            this.dragGhost.style.left = `${e.clientX - this.dragOffsetX}px`;
+            this.dragGhost.style.top = `${e.clientY - this.dragOffsetY}px`;
+        });
+
+        row.addEventListener('dragend', () => {
+            row.classList.remove('dragging');
+            this.dragGhost?.remove();
+            this.dragGhost = null;
+            this.clearAllDropTargets();
+        });
+    }
+
+    private setupDirectoryDropTarget(row: HTMLElement, node: TreeNode): void {
+        let dragOverCount = 0;
+
+        row.addEventListener('dragover', (e) => {
+            if (!this.hasDragData(e)) return;
+
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        });
+
+        row.addEventListener('dragenter', (e) => {
+            if (!this.hasDragData(e)) return;
+
+            e.preventDefault();
+            dragOverCount++;
+            row.classList.add('drop-target');
+        });
+
+        row.addEventListener('dragleave', () => {
+            dragOverCount--;
+
+            if (dragOverCount <= 0) {
+                dragOverCount = 0;
+                row.classList.remove('drop-target');
+            }
+        });
+
+        row.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragOverCount = 0;
+            row.classList.remove('drop-target');
+
+            const sourcePath = e.dataTransfer?.getData(DRAG_MIME_TYPE);
+            if (!sourcePath || !this.isValidDrop(sourcePath, node.path)) return;
+
+            this.collapsedDirs.delete(node.path);
+            this.movePath(sourcePath, node.path);
+        });
+    }
+
+    private setupDropOnRoot(): void {
+        const el = this.options.fileTreeEl;
+
+        const isOverDirectory = (e: DragEvent): boolean => {
+            const target = e.target as HTMLElement;
+            return !!target.closest('.tree-row[data-dir]');
+        };
+
+        el.addEventListener('dragover', (e) => {
+            if (isOverDirectory(e)) {
+                el.classList.remove('drop-target-root');
+                return;
+            }
+
+            if (!this.hasDragData(e)) return;
+
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+            el.classList.add('drop-target-root');
+        });
+
+        el.addEventListener('dragleave', (e) => {
+            const related = e.relatedTarget as HTMLElement | null;
+
+            if (!related || !el.contains(related)) {
+                el.classList.remove('drop-target-root');
+            }
+        });
+
+        el.addEventListener('drop', (e) => {
+            el.classList.remove('drop-target-root');
+            if (isOverDirectory(e)) return;
+
+            e.preventDefault();
+            const sourcePath = e.dataTransfer?.getData(DRAG_MIME_TYPE);
+            if (!sourcePath || !this.isValidDrop(sourcePath, '')) return;
+
+            this.movePath(sourcePath, '');
+        });
+    }
+
+    private movePath(sourcePath: string, targetDir: string): void {
+        const name = basename(sourcePath);
+        const newPath = targetDir ? joinPath(targetDir, name) : name;
+
+        if (sourcePath === newPath) return;
+
+        this.renamePath(sourcePath, newPath);
+    }
+
+    private hasDragData(e: DragEvent): boolean {
+        return !!e.dataTransfer?.types.includes(DRAG_MIME_TYPE);
+    }
+
+    private isValidDrop(sourcePath: string, targetDir: string): boolean {
+        if (sourcePath === targetDir) return false;
+        if (targetDir && isDescendant(sourcePath, targetDir)) return false;
+        if (dirname(sourcePath) === targetDir) return false;
+        return true;
+    }
+
+    private clearAllDropTargets(): void {
+        this.options.fileTreeEl.classList.remove('drop-target-root');
+
+        for (const el of this.options.fileTreeEl.querySelectorAll('.drop-target')) {
+            el.classList.remove('drop-target');
+        }
+    }
+
+    // --- Private: helpers ---
+
+    private getFirstEntrypoint(): string | null {
+        for (const path of this.entrypoints) {
+            if (this.files.has(path)) return path;
+        }
+
+        return null;
+    }
+
+    private isFirstEntrypoint(path: string): boolean {
+        return this.getFirstEntrypoint() === path;
+    }
+
+    private deriveRobotName(filePath: string): string {
+        return basename(filePath).replace(/\.[^.]+$/, '');
     }
 
     private getOrCreateMeta(fileName: string): RobotMeta {
         const existing = this.robotMeta.get(fileName);
-        if (existing) {
-            return existing;
-        }
+        if (existing) return existing;
 
         const created: RobotMeta = {
-            name: this.getUniqueRobotName(fileName, fileName.replace('.ts', '')),
-            team: this.isPlayerFile(fileName) ? 0 : 1,
+            name: this.getUniqueRobotName(fileName, this.deriveRobotName(fileName)),
+            team: this.isFirstEntrypoint(fileName) || this.entrypoints.size === 0 ? 0 : 1,
         };
 
         this.robotMeta.set(fileName, created);
@@ -260,10 +956,7 @@ export class FileStore {
     }
 
     private ensurePlacement(fileName: string): void {
-        if (!this.files.has(fileName) || this.placements.has(fileName)) {
-            return;
-        }
-
+        if (!this.files.has(fileName) || this.placements.has(fileName)) return;
         this.placements.set(fileName, this.createDefaultPlacement(this.placements.size));
     }
 
@@ -281,7 +974,7 @@ export class FileStore {
     }
 
     private getUniqueRobotName(fileName: string, preferredName: string): string {
-        const base = preferredName.trim() || fileName.replace('.ts', '');
+        const base = preferredName.trim() || this.deriveRobotName(fileName);
 
         const taken = new Set(
             Array.from(this.robotMeta.entries())
@@ -289,17 +982,10 @@ export class FileStore {
                 .map(([, meta]) => meta.name),
         );
 
-        if (!taken.has(base)) {
-            return base;
-        }
+        if (!taken.has(base)) return base;
 
         let suffix = 2;
-
-        while (taken.has(`${base}-${suffix}`)) {
-            suffix++;
-        }
-
+        while (taken.has(`${base}-${suffix}`)) suffix++;
         return `${base}-${suffix}`;
     }
-
 }

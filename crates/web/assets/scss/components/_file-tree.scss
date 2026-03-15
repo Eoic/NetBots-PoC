@@ -1,38 +1,101 @@
-.file-tree {
-    flex: 0 0 140px;
+.file-tree-panel {
+    flex: 0 0 auto;
+    width: 160px;
+    min-width: 80px;
+    max-width: 50%;
+    display: flex;
+    flex-direction: column;
     background: var(--nb-color-surface-container);
     border-right: 1px solid var(--nb-color-outline-variant);
-    overflow-y: auto;
-    padding: 0;
+
+    &.resize-hover,
+    &.is-resizing {
+        border-right-color: var(--nb-color-secondary);
+    }
 }
 
-.file-item {
+.file-tree-toolbar {
+    display: flex;
+    gap: 0.15rem;
+    padding: 0.3rem 0.4rem;
+    border-bottom: 1px solid var(--nb-color-outline-variant);
+    flex-shrink: 0;
+}
+
+.file-tree-toolbar-btn {
+    background: none;
+    border: none;
+    color: var(--nb-color-on-surface-variant);
+    cursor: pointer;
+    padding: 0.2rem 0.35rem;
+    font-size: 0.75rem;
+    border-radius: 3px;
+    line-height: 1;
+
+    &:hover {
+        background: var(--nb-color-file-hover);
+        color: var(--nb-color-on-surface);
+    }
+}
+
+.file-tree {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0;
+    user-select: none;
+}
+
+.tree-row {
     display: flex;
     align-items: center;
-    padding: 0.52rem 0.6rem;
-    cursor: pointer;
+    padding: 0.32rem 0.5rem;
+    padding-left: calc(var(--depth, 0) * 16px + 8px);
+    cursor: grab;
     font-size: 0.77rem;
     color: var(--nb-color-on-surface-variant);
-    gap: 0.25rem;
-    border: 0;
-    border-bottom: 1px solid var(--nb-color-outline-variant);
-    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+    gap: 0.3rem;
+    transition: background-color 120ms ease;
+    white-space: nowrap;
+
+    &:hover {
+        background: var(--nb-color-file-hover);
+    }
+
+    &.active {
+        background: var(--nb-color-on-primary);
+        color: var(--nb-color-on-secondary-container);
+
+        .tree-name {
+            color: var(--nb-color-on-secondary-container);
+        }
+    }
 }
 
-.file-item:hover {
-    background: var(--nb-color-file-hover);
+.tree-toggle {
+    width: 14px;
+    font-size: 0.65rem;
+    text-align: center;
+    flex-shrink: 0;
+    color: var(--nb-color-on-surface-variant);
+    transition: transform 150ms ease;
+
+    &.collapsed {
+        transform: rotate(-90deg);
+    }
 }
 
-.file-item.active {
-    background: var(--nb-color-on-primary);
-    color: var(--nb-color-on-secondary-container);
+.tree-icon {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    width: 16px;
+    text-align: center;
 }
 
-.file-item:last-child {
-    border-bottom: 0;
-}
-
-.file-item .file-name {
+.tree-name {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -40,36 +103,103 @@
     color: var(--file-team-color, var(--nb-color-on-surface-variant));
 }
 
-.file-item .file-delete {
+.tree-actions {
     opacity: 0;
-    color: var(--nb-color-error);
-    cursor: pointer;
-    font-size: 0.95rem;
-    line-height: 1;
-    padding: 0 2px;
-    transition: opacity 120ms ease;
+    display: flex;
+    gap: 0.15rem;
+    margin-left: auto;
+    flex-shrink: 0;
+
+    .tree-row:hover & {
+        opacity: 0.6;
+    }
+
+    &:hover {
+        opacity: 1;
+    }
 }
 
-.file-item .file-delete i {
+.tree-action-btn {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 0.7rem;
+    line-height: 1;
+
+    i {
+        pointer-events: none;
+    }
+}
+
+.tree-children {
+    &.collapsed {
+        display: none;
+    }
+}
+
+.tree-rename-input {
+    flex: 1;
+    background: var(--nb-color-surface-container);
+    color: var(--nb-color-on-surface);
+    border: 1px solid var(--nb-color-primary);
+    font-size: 0.77rem;
+    padding: 0 0.2rem;
+    outline: none;
+    font-family: inherit;
+    min-width: 0;
+}
+
+.context-menu {
+    position: fixed;
+    z-index: 1000;
+    background: var(--nb-color-surface-container);
+    border: 1px solid var(--nb-color-outline-variant);
+    border-radius: 4px;
+    padding: 0.25rem 0;
+    min-width: 140px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.context-menu-item {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.77rem;
+    color: var(--nb-color-on-surface);
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover {
+        background: var(--nb-color-file-hover);
+    }
+}
+
+.tree-row.dragging {
+    opacity: 0.4;
+}
+
+.drag-ghost {
+    position: fixed;
+    z-index: 10000;
+    opacity: 0.65;
+    background: var(--nb-color-surface-container);
+    border: 1px solid var(--nb-color-outline-variant);
+    border-radius: 3px;
     pointer-events: none;
 }
 
-.file-item:hover .file-delete {
-    opacity: 0.6;
+.tree-row.drop-target {
+    background: var(--nb-color-file-hover);
+    outline: 1px dashed var(--nb-color-primary);
+    outline-offset: -1px;
 }
 
-.file-item .file-delete:hover {
-    opacity: 1;
+.file-tree.drop-target-root {
+    outline: 1px dashed var(--nb-color-primary);
+    outline-offset: -1px;
 }
 
-.file-item .file-delete.disabled {
-    display: none;
-}
-
-.file-item:hover .file-delete.disabled {
-    display: none;
-}
-
-.file-item.active .file-name {
-    color: var(--nb-color-on-secondary-container);
+.tree-empty-area {
+    flex: 1;
+    min-height: 40px;
 }

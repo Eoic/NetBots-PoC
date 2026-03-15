@@ -2,6 +2,7 @@ import type { DomElements } from './dom';
 import type { FileStore } from './file-store';
 import type { ReplayController } from './replay';
 import type { RobotInfo, PreviewPlacementMap } from './renderer';
+import { basename } from './virtual-fs';
 
 export const DEFAULT_ENEMY_HEADING = 180;
 
@@ -22,7 +23,7 @@ export function startBotPlacementMode(
     source: string,
 ): () => void {
     const { dom, files, replay, worldPositionFromClient, renderPreview, updateSimulationUiState, clearReplayData, onPlacementEnd } = deps;
-    const pendingName = filename.replace('.ts', '');
+    const pendingName = basename(filename).replace(/\.[^.]+$/, '');
     const baseRobotInfos = files.getRobotInfos();
     const pendingRobotInfo = { name: pendingName, team: 1 };
     let pendingPlacement: { x: number; y: number; heading: number } | null = null;
@@ -64,6 +65,7 @@ export function startBotPlacementMode(
 
     const commitPlacement = (spawnX: number, spawnY: number): void => {
         files.setFile(filename, source);
+        files.markEntrypoint(filename);
 
         files.setPlacement(filename, {
             x: spawnX,

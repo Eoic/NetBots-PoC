@@ -31,10 +31,10 @@
             </div>
             <div id="robot-inspector" class="robot-inspector hidden">
                 <div class="robot-inspector-title">Robot</div>
-                <label class="robot-inspector-field">
+                <div class="robot-inspector-row">
                     <span>Name</span>
-                    <input id="robot-name-input" type="text" maxlength="32" autocomplete="off">
-                </label>
+                    <span id="robot-name-value">-</span>
+                </div>
                 <label class="robot-inspector-field">
                     <span>Team</span>
                     <select id="robot-team-select">
@@ -80,7 +80,17 @@
                         <button class="tab" data-tab="logs">Logs</button>
                     </div>
                     <div class="editor-body">
-                        <div class="file-tree" id="file-tree"></div>
+                        <div class="file-tree-panel">
+                            <div class="file-tree-toolbar">
+                                <button class="file-tree-toolbar-btn" id="btn-new-file" title="New File">
+                                    <i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i>
+                                </button>
+                                <button class="file-tree-toolbar-btn" id="btn-new-folder" title="New Folder">
+                                    <i class="fa-solid fa-folder-plus" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <div class="file-tree" id="file-tree"></div>
+                        </div>
                         <div class="editor-content" id="editor-content">
                             <div id="codemirror-container"></div>
                             <pre id="logs-container" class="hidden"></pre>

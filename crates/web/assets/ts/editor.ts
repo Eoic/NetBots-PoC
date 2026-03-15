@@ -4,12 +4,21 @@ import { basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
 
-function createEditorState(text: string): EditorState {
+function getLanguageExtension(filePath: string): ReturnType<typeof javascript> | [] {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    switch (ext) {
+        case 'ts': return javascript({ typescript: true });
+        case 'js': return javascript();
+        default: return [];
+    }
+}
+
+function createEditorState(text: string, filePath: string): EditorState {
     return EditorState.create({
         doc: text,
         extensions: [
             basicSetup,
-            javascript({ typescript: true }),
+            getLanguageExtension(filePath),
             oneDark,
             EditorView.theme({
                 '&': { height: '100%' },
@@ -26,17 +35,17 @@ export class CodeEditor {
 
     create(): void {
         this.editor = new EditorView({
-            state: createEditorState(''),
+            state: createEditorState('', 'untitled.ts'),
             parent: this.container,
         });
     }
 
-    setContent(text: string): void {
+    setContent(text: string, filePath: string = 'untitled.ts'): void {
         if (!this.editor) {
             return;
         }
 
-        this.editor.setState(createEditorState(text));
+        this.editor.setState(createEditorState(text, filePath));
     }
 
     getContent(): string {

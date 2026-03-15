@@ -24,7 +24,7 @@ import {
 } from './renderer';
 import { TemplateLoader } from './templates';
 import type { ReplayData } from './types';
-import { setupEditorResize, setupTabs } from './ui';
+import { setupEditorResize, setupFileTreeResize, setupTabs } from './ui';
 
 const PAGE_LOADING_MIN_MS = 550;
 const SCENE_LOADING_MIN_MS = 700;
@@ -84,6 +84,7 @@ export async function bootstrap(): Promise<void> {
             stopPlacementMode = null;
             replayData = null;
             replay.clearReplay();
+            refreshSelectedRobotFromMeta();
             renderPreview(
                 files.getRobotInfos(),
                 files.getPreviewPlacements(),
@@ -100,7 +101,7 @@ export async function bootstrap(): Promise<void> {
     setupTabs({
         tabBtns: dom.tabBtns,
         cmContainer: dom.cmContainer,
-        fileTreeEl: dom.fileTreeEl,
+        fileTreePanel: dom.fileTreeEl.parentElement!,
         logsContainer: dom.logsContainer,
     });
 
@@ -108,6 +109,10 @@ export async function bootstrap(): Promise<void> {
         resizeHandle: dom.resizeHandle,
         arenaPanel: dom.arenaPanel,
         editorOverlay: dom.editorOverlay,
+    });
+
+    setupFileTreeResize({
+        fileTreePanel: dom.fileTreeEl.parentElement! as HTMLElement,
     });
 
     const placementDeps: PlacementDeps = {
@@ -154,6 +159,14 @@ export async function bootstrap(): Promise<void> {
         stopPlacementMode = startBotPlacementMode(placementDeps, name, source);
     });
 
+    dom.newFileBtn.addEventListener('click', () => {
+        files.promptNewFileAtRoot();
+    });
+
+    dom.newFolderBtn.addEventListener('click', () => {
+        files.promptNewFolderAtRoot();
+    });
+
     dom.runBtn.addEventListener('click', async () => {
         await runGame();
     });
@@ -172,24 +185,6 @@ export async function bootstrap(): Promise<void> {
 
     document.addEventListener('keydown', (event) => {
         handleGlobalKeyDown(event);
-    });
-
-    dom.robotNameInput.addEventListener('change', () => {
-        if (replayData || !selectedRobotFileName) {
-            return;
-        }
-
-        const updated = files.updateRobotMeta(selectedRobotFileName, {
-            name: dom.robotNameInput.value,
-        });
-
-        if (!updated) {
-            return;
-        }
-
-        selectedRobotName = updated.name;
-        renderPreview(files.getRobotInfos(), files.getPreviewPlacements());
-        updateSelectedRobotPanel();
     });
 
     dom.robotTeamSelect.addEventListener('change', () => {
@@ -233,6 +228,19 @@ export async function bootstrap(): Promise<void> {
         return replayData ? replayData.robotInfos : files.getRobotInfos();
     }
 
+    function refreshSelectedRobotFromMeta(): void {
+        if (!selectedRobotFileName) return;
+
+        const meta = files.getRobotMeta(selectedRobotFileName);
+
+        if (meta) {
+            selectedRobotName = meta.name;
+        } else {
+            selectedRobotFileName = null;
+            selectedRobotName = null;
+        }
+    }
+
     function clearSelectedRobot(): void {
         selectedRobotFileName = null;
         selectedRobotName = null;
@@ -270,10 +278,8 @@ export async function bootstrap(): Promise<void> {
         setSelectedRobot(selectedRobotName);
         refreshSelectedRobotMarker(robotInfos);
 
-        const editable = replayData === null;
-        dom.robotNameInput.disabled = !editable;
-        dom.robotTeamSelect.disabled = !editable;
-        dom.robotNameInput.value = meta.name;
+        dom.robotTeamSelect.disabled = replayData !== null;
+        dom.robotNameValue.textContent = meta.name;
         dom.robotTeamSelect.value = String(meta.team);
         dom.robotPositionValue.textContent = `(${robotInfo.x.toFixed(1)}, ${robotInfo.y.toFixed(1)})`;
         dom.robotStatusValue.textContent = robotInfo.alive ? 'Alive' : 'Dead';
@@ -388,11 +394,11 @@ export async function bootstrap(): Promise<void> {
             tabBtns: dom.tabBtns,
             logTabBtn: dom.logTabBtn,
             cmContainer: dom.cmContainer,
-            fileTreeEl: dom.fileTreeEl,
+            fileTreePanel: dom.fileTreeEl.parentElement!,
         });
 
         try {
-            const result = await runSimulation(files.toRobotPayloads(), simulationTicks);
+            const result = await runSimulation(files.toRunRequest(simulationTicks));
 
             logs.logErrors(result.errors);
             logs.logRobotMessages(result.logs);
@@ -413,7 +419,7 @@ export async function bootstrap(): Promise<void> {
                 robotInfos: replayPayload.robots,
                 arenaWidth: replayPayload.arena.width,
                 arenaHeight: replayPayload.arena.height,
-                playerTeam: files.getRobotMeta('my-bot.ts')?.team ?? null,
+                playerTeam: files.getRobotInfos()[0]?.team ?? null,
                 winnerTeam: result.winner_team ?? null,
                 totalTicks: result.total_ticks ?? replayPayload.ticks.length,
             };
@@ -469,6 +475,7 @@ export async function bootstrap(): Promise<void> {
         editor.create();
         const playerSource = await templates.loadPlayerTemplate();
         files.setFile('my-bot.ts', playerSource);
+        files.markEntrypoint('my-bot.ts');
         files.switchToFile('my-bot.ts');
         await refreshArenaPreview();
     } finally {

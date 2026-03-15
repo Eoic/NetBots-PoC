@@ -5,7 +5,7 @@ interface LogTabControls {
     tabBtns: HTMLButtonElement[];
     logTabBtn: HTMLButtonElement;
     cmContainer: HTMLDivElement;
-    fileTreeEl: HTMLDivElement;
+    fileTreePanel: HTMLElement;
 }
 
 interface LogPanelOptions {
@@ -76,7 +76,7 @@ export class LogPanel {
         controls.tabBtns.forEach((btn) => btn.classList.remove('active'));
         controls.logTabBtn.classList.add('active');
         controls.cmContainer.classList.add('hidden');
-        controls.fileTreeEl.classList.add('hidden');
+        controls.fileTreePanel.classList.add('hidden');
         this.logsContainer.classList.remove('hidden');
     }
 

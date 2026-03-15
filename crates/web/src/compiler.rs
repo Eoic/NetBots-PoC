@@ -1,10 +1,23 @@
+use std::collections::HashMap;
+use std::sync::LazyLock;
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use regex::Regex;
-use std::time::Duration;
 use tokio::fs;
 use tokio::process::Command;
 
 const COMPILATION_TIMEOUT: Duration = Duration::from_secs(10);
+
+static ON_TICK_SIG_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"export\s+function\s+on_tick\s*\((?P<params>[^)]*)\)").unwrap()
+});
+
+static ON_TICK_EXPORT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"export\s+function\s+on_tick\s*\(").unwrap()
+});
+
+static PRELUDE: LazyLock<String> = LazyLock::new(build_prelude);
 
 fn build_prelude() -> String {
     format!(
@@ -120,10 +133,7 @@ export function on_tick(
 }
 
 fn rewrite_source(source: &str) -> Result<String> {
-    let on_tick_sig_re = Regex::new(r"export\s+function\s+on_tick\s*\((?P<params>[^)]*)\)")
-        .context("Failed to build on_tick signature regex")?;
-
-    let params = on_tick_sig_re
+    let params = ON_TICK_SIG_RE
         .captures(source)
         .and_then(|caps| caps.name("params"))
         .map(|m| m.as_str())
@@ -135,30 +145,48 @@ fn rewrite_source(source: &str) -> Result<String> {
         );
     }
 
-    let on_tick_export_re = Regex::new(r"export\s+function\s+on_tick\s*\(")
-        .context("Failed to build on_tick rewrite regex")?;
-
-    Ok(on_tick_export_re
+    Ok(ON_TICK_EXPORT_RE
         .replace(source, "export function __user_on_tick(")
         .to_string())
 }
 
-pub async fn compile(source: &str) -> Result<Vec<u8>> {
+pub async fn compile(
+    entrypoint_path: &str,
+    files: &HashMap<String, String>,
+) -> Result<Vec<u8>> {
     let tmp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
-    let source_path = tmp_dir.path().join("robot.ts");
-    let output_path = tmp_dir.path().join("robot.wasm");
-    let rewritten_source = rewrite_source(source)?;
-    let full_source = format!("{}{}", build_prelude(), rewritten_source);
 
+    for (path, content) in files {
+        let file_path = tmp_dir.path().join(path);
+        if let Some(parent) = file_path.parent() {
+            fs::create_dir_all(parent)
+                .await
+                .context("Failed to create directory structure")?;
+        }
+        fs::write(&file_path, content)
+            .await
+            .context("Failed to write file")?;
+    }
+
+    let source = files
+        .get(entrypoint_path)
+        .context("Entrypoint not found in files")?;
+    let rewritten_source = rewrite_source(source)?;
+    let full_source = format!("{}{}", *PRELUDE, rewritten_source);
+    let source_path = tmp_dir.path().join(entrypoint_path);
     fs::write(&source_path, full_source)
         .await
-        .context("Failed to write source file")?;
+        .context("Failed to write entrypoint")?;
+
+    let output_path = tmp_dir.path().join("output.wasm");
 
     let output = tokio::time::timeout(
         COMPILATION_TIMEOUT,
         Command::new("npx")
             .args([
                 "--yes",
+                "--package",
+                "assemblyscript",
                 "asc",
                 source_path.to_str().context("Non-UTF8 temp path")?,
                 "--outFile",

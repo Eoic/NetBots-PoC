@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use askama::Template;
 use axum::http::StatusCode;
 use axum::response::{Html, Json};
@@ -19,14 +22,15 @@ pub async fn index() -> Html<String> {
 
 #[derive(Deserialize)]
 pub struct RunRequest {
-    pub robots: Vec<RobotEntry>,
+    pub files: HashMap<String, String>,
+    pub robots: Vec<RobotEntrypoint>,
     pub max_ticks: Option<u32>,
 }
 
 #[derive(Deserialize)]
-pub struct RobotEntry {
+pub struct RobotEntrypoint {
     pub name: String,
-    pub source: String,
+    pub file: String,
     pub team: u8,
     pub spawn: Option<SpawnPointRequest>,
 }
@@ -112,13 +116,16 @@ pub async fn run(Json(req): Json<RunRequest>) -> (StatusCode, Json<RunResponse>)
         Err(err) => return err,
     };
 
+    let shared_files = Arc::new(validated.files.clone());
+
     let compile_futures: Vec<_> = validated
         .robots
         .iter()
         .map(|robot| {
-            let source = robot.source.clone();
+            let file = robot.file.clone();
             let name = robot.name.clone();
-            async move { (name, compiler::compile(&source).await) }
+            let files = Arc::clone(&shared_files);
+            async move { (name, compiler::compile(&file, &files).await) }
         })
         .collect();
 
