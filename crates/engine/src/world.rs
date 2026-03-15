@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-// Game configuration constants
 pub const ARENA_WIDTH: f64 = 1200.0;
 pub const ARENA_HEIGHT: f64 = 800.0;
 pub const ROBOT_RADIUS: f64 = 18.0;
@@ -13,6 +13,15 @@ pub const MAX_FORWARD_SPEED: f64 = 8.0;
 pub const MAX_BACKWARD_SPEED: f64 = 2.0;
 pub const GUN_COOLDOWN_RATE: f64 = 0.1;
 pub const SCAN_ARC_DEGREES: f64 = 10.0;
+pub const MAX_TEAMS: u8 = 16;
+pub const HIT_REWARD_MULTIPLIER: f64 = 2.0;
+pub const ROBOT_COLLISION_DAMAGE: f64 = 1.0;
+pub const COLLISION_SEPARATION_BUFFER: f64 = 0.5;
+pub const MIN_BULLET_POWER: f64 = 1.0;
+pub const MAX_BULLET_POWER: f64 = 3.0;
+pub const GUN_HEAT_BASE: f64 = 1.0;
+pub const GUN_HEAT_POWER_DIVISOR: f64 = 5.0;
+pub const BULLET_DAMAGE_MULTIPLIER: f64 = 4.0;
 
 #[derive(Debug, Clone)]
 pub struct RobotConfig {
@@ -25,7 +34,7 @@ pub struct RobotConfig {
 pub struct SpawnPoint {
     pub x: f64,
     pub y: f64,
-    pub heading: f64,
+    pub heading: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,62 +56,60 @@ impl GameWorld {
     }
 
     pub fn new_with_max_ticks(configs: &[RobotConfig], max_ticks: u32) -> Self {
-        let team0: Vec<usize> = configs
-            .iter()
-            .enumerate()
-            .filter(|(_, c)| c.team == 0)
-            .map(|(i, _)| i)
-            .collect();
-        let team1_plus: Vec<usize> = configs
-            .iter()
-            .enumerate()
-            .filter(|(_, c)| c.team != 0)
-            .map(|(i, _)| i)
-            .collect();
+        debug_assert!(
+            configs.iter().all(|config| config.team < MAX_TEAMS),
+            "Robot team ids must be in range 0..{}",
+            MAX_TEAMS - 1
+        );
 
-        let team0_count = team0.len();
-        let team1_count = team1_plus.len();
-
-        let mut robots = vec![None; configs.len()];
-
-        for (idx, &config_i) in team0.iter().enumerate() {
-            let c = &configs[config_i];
-            robots[config_i] = Some(Robot {
-                id: config_i,
-                name: c.name.clone(),
-                team: c.team,
-                x: c.spawn.as_ref().map(|spawn| spawn.x).unwrap_or(100.0),
-                y: c
-                    .spawn
-                    .as_ref()
-                    .map(|spawn| spawn.y)
-                    .unwrap_or(ARENA_HEIGHT * (idx as f64 + 1.0) / (team0_count as f64 + 1.0)),
-                heading: c.spawn.as_ref().map(|spawn| spawn.heading).unwrap_or(0.0),
-                speed: 0.0,
-                energy: STARTING_ENERGY,
-                gun_heat: STARTING_GUN_HEAT,
-                alive: true,
-            });
+        let mut team_order: Vec<u8> = Vec::new();
+        let mut team_members: HashMap<u8, Vec<usize>> = HashMap::new();
+        for (idx, config) in configs.iter().enumerate() {
+            if !team_members.contains_key(&config.team) {
+                team_order.push(config.team);
+            }
+            team_members.entry(config.team).or_default().push(idx);
         }
 
-        for (idx, &config_i) in team1_plus.iter().enumerate() {
-            let c = &configs[config_i];
-            robots[config_i] = Some(Robot {
-                id: config_i,
-                name: c.name.clone(),
-                team: c.team,
-                x: c.spawn.as_ref().map(|spawn| spawn.x).unwrap_or(550.0),
-                y: c
-                    .spawn
-                    .as_ref()
-                    .map(|spawn| spawn.y)
-                    .unwrap_or(ARENA_HEIGHT * (idx as f64 + 1.0) / (team1_count as f64 + 1.0)),
-                heading: c.spawn.as_ref().map(|spawn| spawn.heading).unwrap_or(180.0),
-                speed: 0.0,
-                energy: STARTING_ENERGY,
-                gun_heat: STARTING_GUN_HEAT,
-                alive: true,
-            });
+        let team_count = team_order.len().max(1);
+        let mut team_default_x: HashMap<u8, f64> = HashMap::new();
+        for (team_rank, team) in team_order.iter().enumerate() {
+            let x = ARENA_WIDTH * (team_rank as f64 + 1.0) / (team_count as f64 + 1.0);
+            team_default_x.insert(*team, x);
+        }
+
+        let mut robots = vec![None; configs.len()];
+        for team in team_order {
+            let members = team_members.get(&team).expect("Team members should exist");
+            let default_x = *team_default_x
+                .get(&team)
+                .expect("Team default x should exist");
+            let default_heading = if default_x <= ARENA_WIDTH / 2.0 {
+                0.0
+            } else {
+                180.0
+            };
+            for (row_index, &config_i) in members.iter().enumerate() {
+                let c = &configs[config_i];
+                robots[config_i] = Some(Robot {
+                    id: config_i,
+                    name: c.name.clone(),
+                    team: c.team,
+                    x: c.spawn.as_ref().map(|spawn| spawn.x).unwrap_or(default_x),
+                    y: c.spawn.as_ref().map(|spawn| spawn.y).unwrap_or(
+                        ARENA_HEIGHT * (row_index as f64 + 1.0) / (members.len() as f64 + 1.0),
+                    ),
+                    heading: c
+                        .spawn
+                        .as_ref()
+                        .and_then(|spawn| spawn.heading)
+                        .unwrap_or(default_heading),
+                    speed: 0.0,
+                    energy: STARTING_ENERGY,
+                    gun_heat: STARTING_GUN_HEAT,
+                    alive: true,
+                });
+            }
         }
 
         Self {
@@ -194,4 +201,58 @@ pub enum RobotAction {
 #[derive(Debug, Clone, Default)]
 pub struct PlayerActions {
     pub actions: Vec<RobotAction>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_world_distributes_default_spawns_per_team_column() {
+        let world = GameWorld::new(&[
+            RobotConfig {
+                name: "bot-a".to_string(),
+                team: 2,
+                spawn: None,
+            },
+            RobotConfig {
+                name: "bot-b".to_string(),
+                team: 7,
+                spawn: None,
+            },
+            RobotConfig {
+                name: "bot-c".to_string(),
+                team: 12,
+                spawn: None,
+            },
+        ]);
+
+        assert_eq!(world.robots.len(), 3);
+
+        assert!((world.robots[0].x - (ARENA_WIDTH * 1.0 / 4.0)).abs() < 0.001);
+        assert!((world.robots[1].x - (ARENA_WIDTH * 2.0 / 4.0)).abs() < 0.001);
+        assert!((world.robots[2].x - (ARENA_WIDTH * 3.0 / 4.0)).abs() < 0.001);
+
+        assert_eq!(world.robots[0].heading, 0.0);
+        assert_eq!(world.robots[1].heading, 0.0);
+        assert_eq!(world.robots[2].heading, 180.0);
+    }
+
+    #[test]
+    fn test_explicit_spawn_overrides_default_position_and_heading() {
+        let world = GameWorld::new(&[RobotConfig {
+            name: "bot-a".to_string(),
+            team: 3,
+            spawn: Some(SpawnPoint {
+                x: 321.0,
+                y: 654.0,
+                heading: Some(270.0),
+            }),
+        }]);
+
+        assert_eq!(world.robots.len(), 1);
+        assert!((world.robots[0].x - 321.0).abs() < 0.001);
+        assert!((world.robots[0].y - 654.0).abs() < 0.001);
+        assert_eq!(world.robots[0].heading, 270.0);
+    }
 }
