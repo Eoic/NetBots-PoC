@@ -79,6 +79,8 @@ let robotRenderStates: RobotRenderState[] = [];
 let robotVisualSignature = '';
 let selectedRobotName: string | null = null;
 let selectionMarker: Graphics | null = null;
+let rotationHandle: Graphics | null = null;
+let previewModeActive = false;
 const ROBOT_SIZE = 18;
 const RENDER_SCALE = 2;
 const MAX_TEAMS = 16;
@@ -206,18 +208,31 @@ function ensureSelectionMarker(): void {
     }
 }
 
+function ensureRotationHandle(): void {
+    if (!viewport) return;
+    if (!rotationHandle) {
+        rotationHandle = new Graphics();
+        rotationHandle.visible = false;
+        viewport.addChild(rotationHandle);
+    }
+}
+
+const ROTATION_HANDLE_DIST = ROBOT_SIZE + 16;
+
 function updateSelectionMarker(robotInfos: RobotInfo[]): void {
     if (!viewport || !selectionMarker) {
         return;
     }
     if (!selectedRobotName) {
         selectionMarker.visible = false;
+        if (rotationHandle) rotationHandle.visible = false;
         return;
     }
 
     const selectedIndex = robotInfos.findIndex((robot) => robot.name === selectedRobotName);
     if (selectedIndex < 0 || selectedIndex >= robotRenderStates.length) {
         selectionMarker.visible = false;
+        if (rotationHandle) rotationHandle.visible = false;
         return;
     }
 
@@ -228,6 +243,21 @@ function updateSelectionMarker(robotInfos: RobotInfo[]): void {
     selectionMarker.stroke({ color: markerColor, width: 2 });
     selectionMarker.visible = true;
     viewport.addChild(selectionMarker);
+
+    if (rotationHandle && previewModeActive) {
+        const headingRad = -(state.heading * Math.PI) / 180;
+        const hx = state.x + Math.cos(headingRad) * ROTATION_HANDLE_DIST;
+        const hy = state.y + Math.sin(headingRad) * ROTATION_HANDLE_DIST;
+        rotationHandle.clear();
+        rotationHandle.circle(hx, hy, 6);
+        rotationHandle.fill({ color: markerColor, alpha: 0.9 });
+        rotationHandle.circle(hx, hy, 6);
+        rotationHandle.stroke({ color: 0xffffff, width: 1.5 });
+        rotationHandle.visible = true;
+        viewport.addChild(rotationHandle);
+    } else if (rotationHandle) {
+        rotationHandle.visible = false;
+    }
 }
 
 export async function initArena(
@@ -309,6 +339,7 @@ export async function initArena(
     viewport.addChild(grid);
 
     ensureSelectionMarker();
+    ensureRotationHandle();
     ensureRobotVisuals(robotInfos);
     updateSelectionMarker(robotInfos);
 
@@ -320,8 +351,10 @@ export function renderPreview(
     placements: PreviewPlacementMap = {},
 ): void {
     if (!app || !viewport) return;
+    previewModeActive = true;
     ensureRobotVisuals(robotInfos);
     ensureSelectionMarker();
+    ensureRotationHandle();
     const view = viewport;
     robotInfos.forEach((info, i) => {
         if (i >= robotGraphics.length) return;
@@ -451,8 +484,10 @@ export function renderTick(
     robotInfos: RobotInfo[],
 ): void {
     if (!app || !viewport) return;
+    previewModeActive = false;
     ensureRobotVisuals(robotInfos);
     ensureSelectionMarker();
+    ensureRotationHandle();
     const view = viewport;
 
     tickData.robots.forEach((robot, i) => {
@@ -461,8 +496,9 @@ export function renderTick(
         graphic.x = robot.x;
         graphic.y = robot.y;
         graphic.rotation = -(robot.heading * Math.PI) / 180;
-        graphic.visible = robot.alive;
-        graphic.alpha = robot.alive ? 1.0 : 0.2;
+        graphic.visible = true;
+        graphic.alpha = robot.alive ? 1.0 : 0.35;
+        graphic.tint = robot.alive ? 0xffffff : 0x808080;
         robotRenderStates[i] = {
             x: robot.x,
             y: robot.y,
@@ -473,7 +509,8 @@ export function renderTick(
         const label = robotLabels[i];
         label.container.x = robot.x;
         label.container.y = robot.y + ROBOT_SIZE + 4;
-        label.container.visible = robot.alive;
+        label.container.visible = true;
+        label.container.alpha = robot.alive ? 1.0 : 0.5;
         updateHealthBar(label, robot.energy, arenaTheme);
     });
 
@@ -505,6 +542,31 @@ export function renderTick(
     updateSelectionMarker(robotInfos);
 }
 
+export function hitTestRotationHandle(clientX: number, clientY: number): boolean {
+    if (!rotationHandle || !rotationHandle.visible || !selectedRobotName) {
+        return false;
+    }
+
+    const worldPos = worldPositionFromClient(clientX, clientY);
+    if (!worldPos) return false;
+
+    const selectedIdx = robotLabels.findIndex((label) => label.text.text === selectedRobotName);
+    if (selectedIdx < 0 || selectedIdx >= robotRenderStates.length) return false;
+
+    const state = robotRenderStates[selectedIdx];
+    const headingRad = -(state.heading * Math.PI) / 180;
+    const hx = state.x + Math.cos(headingRad) * ROTATION_HANDLE_DIST;
+    const hy = state.y + Math.sin(headingRad) * ROTATION_HANDLE_DIST;
+
+    const dx = worldPos.x - hx;
+    const dy = worldPos.y - hy;
+    return (dx * dx + dy * dy) <= 10 * 10;
+}
+
+export function isPreviewMode(): boolean {
+    return previewModeActive;
+}
+
 export function destroy(): void {
     if (!app) return;
     app.destroy(true);
@@ -515,6 +577,7 @@ export function destroy(): void {
     robotLabels = [];
     robotRenderStates = [];
     selectionMarker = null;
+    rotationHandle = null;
     robotVisualSignature = '';
 }
 
