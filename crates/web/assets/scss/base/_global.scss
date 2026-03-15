@@ -76,14 +76,6 @@ body {
     @include apply-theme(t.$theme-one-dark);
 }
 
-:root[data-theme='terminal-amber'] {
-    @include apply-theme(t.$theme-terminal-amber);
-}
-
-:root[data-theme='terminal-neon'] {
-    @include apply-theme(t.$theme-terminal-neon);
-}
-
 body {
     font-family: t.$font-family;
     background-color: var(--nb-color-background);
