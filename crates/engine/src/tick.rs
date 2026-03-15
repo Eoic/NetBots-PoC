@@ -29,7 +29,18 @@ pub fn run_events_phase(world: &mut GameWorld) -> (TickEvents, Vec<GameEvent>) {
     let mut tick_events = TickEvents::default();
     let mut game_events = Vec::new();
 
-    // Bullet-robot collisions
+    process_bullet_hits(world, &mut tick_events, &mut game_events);
+    process_wall_collisions(world, &mut tick_events, &mut game_events);
+    process_robot_collisions(world, &mut tick_events, &mut game_events);
+
+    (tick_events, game_events)
+}
+
+fn process_bullet_hits(
+    world: &mut GameWorld,
+    tick_events: &mut TickEvents,
+    game_events: &mut Vec<GameEvent>,
+) {
     let bullet_hits = detect_bullet_robot_collisions(world);
     let mut bullets_to_remove: Vec<usize> = bullet_hits.iter().map(|h| h.bullet_index).collect();
     bullets_to_remove.sort_unstable();
@@ -43,9 +54,8 @@ pub fn run_events_phase(world: &mut GameWorld) -> (TickEvents, Vec<GameEvent>) {
                 game_events.push(GameEvent::RobotDied { robot_id: robot.id });
             }
         }
-        // Shooter gains energy
         if let Some(shooter) = world.robots.iter_mut().find(|r| r.id == hit.shooter_id) {
-            shooter.energy += hit.power * 2.0;
+            shooter.energy += hit.power * HIT_REWARD_MULTIPLIER;
         }
 
         tick_events.hits.push(HitEvent {
@@ -63,7 +73,13 @@ pub fn run_events_phase(world: &mut GameWorld) -> (TickEvents, Vec<GameEvent>) {
             world.bullets.remove(bi);
         }
     }
+}
 
+fn process_wall_collisions(
+    world: &mut GameWorld,
+    tick_events: &mut TickEvents,
+    game_events: &mut Vec<GameEvent>,
+) {
     let wall_collisions = detect_robot_wall_collisions(world);
 
     for wc in &wall_collisions {
@@ -78,12 +94,18 @@ pub fn run_events_phase(world: &mut GameWorld) -> (TickEvents, Vec<GameEvent>) {
             kind: "wall".to_string(),
         });
     }
+}
 
+fn process_robot_collisions(
+    world: &mut GameWorld,
+    tick_events: &mut TickEvents,
+    game_events: &mut Vec<GameEvent>,
+) {
     let robot_collisions = detect_robot_robot_collisions(world);
     for rc in &robot_collisions {
         for &rid in &[rc.robot_a, rc.robot_b] {
             if let Some(robot) = world.robots.iter_mut().find(|r| r.id == rid) {
-                robot.energy -= 1.0;
+                robot.energy -= ROBOT_COLLISION_DAMAGE;
                 if robot.energy <= 0.0 {
                     robot.alive = false;
                     game_events.push(GameEvent::RobotDied { robot_id: rid });
@@ -119,7 +141,7 @@ pub fn run_events_phase(world: &mut GameWorld) -> (TickEvents, Vec<GameEvent>) {
         let overlap = ROBOT_RADIUS * 2.0 - dist;
 
         if overlap > 0.0 {
-            let push = overlap / 2.0 + 0.5;
+            let push = overlap / 2.0 + COLLISION_SEPARATION_BUFFER;
             let nx = dx / dist;
             let ny = dy / dist;
             world.robots[rc.robot_a].x -= nx * push;
@@ -128,8 +150,6 @@ pub fn run_events_phase(world: &mut GameWorld) -> (TickEvents, Vec<GameEvent>) {
             world.robots[rc.robot_b].y += ny * push;
         }
     }
-
-    (tick_events, game_events)
 }
 
 /// Run the resolution phase (phase 3): apply buffered actions to robots.
@@ -163,7 +183,7 @@ pub fn run_resolution_phase(
                     rotated = true;
                 }
                 RobotAction::Shoot(power) if !shot && world.robots[i].gun_heat <= 0.0 => {
-                    let power = power.clamp(1.0, 3.0);
+                    let power = power.clamp(MIN_BULLET_POWER, MAX_BULLET_POWER);
                     let robot = &world.robots[i];
                     let heading_rad = robot.heading.to_radians();
                     world.bullets.push(Bullet {
@@ -175,7 +195,7 @@ pub fn run_resolution_phase(
                         speed: BULLET_SPEED,
                         power,
                     });
-                    world.robots[i].gun_heat = 1.0 + power / 5.0;
+                    world.robots[i].gun_heat = GUN_HEAT_BASE + power / GUN_HEAT_POWER_DIVISOR;
                     game_events.push(GameEvent::ShotFired { robot_id: i });
                     shot = true;
                 }
@@ -189,16 +209,14 @@ pub fn run_resolution_phase(
 
 /// Run the physics phase (phase 4): move entities, remove OOB bullets, cool guns, clamp robots.
 pub fn run_physics_phase(world: &mut GameWorld) {
-    // Move robots
     for robot in world.robots.iter_mut() {
         if !robot.alive {
             continue;
         }
         let heading_rad = robot.heading.to_radians();
         robot.x += heading_rad.cos() * robot.speed;
-        robot.y -= heading_rad.sin() * robot.speed; // Y-down screen coords
+        robot.y -= heading_rad.sin() * robot.speed;
 
-        // Clamp to arena
         robot.x = robot
             .x
             .clamp(ROBOT_RADIUS, world.arena_width - ROBOT_RADIUS);
@@ -206,18 +224,15 @@ pub fn run_physics_phase(world: &mut GameWorld) {
             .y
             .clamp(ROBOT_RADIUS, world.arena_height - ROBOT_RADIUS);
 
-        // Cool gun
         robot.gun_heat = (robot.gun_heat - GUN_COOLDOWN_RATE).max(0.0);
     }
 
-    // Move bullets
     for bullet in world.bullets.iter_mut() {
         let heading_rad = bullet.heading.to_radians();
         bullet.x += heading_rad.cos() * bullet.speed;
         bullet.y -= heading_rad.sin() * bullet.speed;
     }
 
-    // Remove out-of-bounds bullets
     world.bullets.retain(|b| {
         b.x >= 0.0 && b.x <= world.arena_width && b.y >= 0.0 && b.y <= world.arena_height
     });
@@ -271,7 +286,6 @@ pub fn check_win(world: &mut GameWorld) {
             winner_team: alive_teams.into_iter().next(),
         };
     } else if world.tick >= world.max_ticks {
-        // Sum energy per team, highest total wins
         let mut team_energy: std::collections::HashMap<u8, f64> = std::collections::HashMap::new();
         for robot in world.robots.iter().filter(|r| r.alive) {
             *team_energy.entry(robot.team).or_insert(0.0) += robot.energy;
@@ -302,21 +316,12 @@ pub fn check_win(world: &mut GameWorld) {
 pub fn run_tick(world: &mut GameWorld, all_actions: &[PlayerActions]) -> TickSnapshot {
     world.tick += 1;
 
-    // Phase 1: Events (collision detection + damage) is handled externally
-    // so that WASM callbacks can be invoked between events and decisions.
-    // By the time this function is called, events have already been processed
-    // and actions collected.
-
-    // Phase 3: Resolution
     let game_events = run_resolution_phase(world, all_actions);
 
-    // Phase 4: Physics
     run_physics_phase(world);
 
-    // Phase 5: Capture
     let snapshot = capture_snapshot(world, game_events);
 
-    // Phase 6: Win check
     check_win(world);
 
     snapshot
@@ -356,7 +361,6 @@ mod tests {
 
         run_tick(&mut world, &actions);
 
-        // Robot 0 heading is 0° (right), so x should increase
         assert!(world.robots[0].x > initial_x);
     }
 
@@ -377,7 +381,7 @@ mod tests {
     #[test]
     fn test_robot_shoots() {
         let mut world = test_world_2v2();
-        world.robots[0].gun_heat = 0.0; // Cool the gun
+        world.robots[0].gun_heat = 0.0;
 
         let actions = vec![
             PlayerActions {
@@ -426,7 +430,7 @@ mod tests {
             PlayerActions {
                 actions: vec![
                     RobotAction::SetSpeed(3.0),
-                    RobotAction::SetSpeed(7.0), // should be ignored
+                    RobotAction::SetSpeed(7.0),
                 ],
             },
             PlayerActions::default(),
@@ -439,7 +443,6 @@ mod tests {
     #[test]
     fn test_gun_heat_prevents_shooting() {
         let mut world = test_world_2v2();
-        // gun_heat starts at 1.0
 
         let actions = vec![
             PlayerActions {
@@ -449,7 +452,7 @@ mod tests {
         ];
 
         run_tick(&mut world, &actions);
-        assert_eq!(world.bullets.len(), 0); // Can't shoot, gun is hot
+        assert_eq!(world.bullets.len(), 0);
     }
 
     #[test]
@@ -538,7 +541,6 @@ mod tests {
     #[test]
     fn test_scan_finds_enemy_in_arc() {
         let world = test_world_2v2();
-        // Robot 0 and Robot 1 are placed in separate team columns, directly ahead.
         let dist = compute_scan(&world, 0);
         assert!(dist > 0.0);
         assert!((dist - 400.0).abs() < 1.0);
@@ -547,7 +549,7 @@ mod tests {
     #[test]
     fn test_scan_misses_enemy_outside_arc() {
         let mut world = test_world_2v2();
-        world.robots[0].heading = 90.0; // Facing up, enemy is to the right
+        world.robots[0].heading = 90.0;
         let dist = compute_scan(&world, 0);
         assert_eq!(dist, -1.0);
     }
