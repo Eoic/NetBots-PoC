@@ -291,6 +291,7 @@ export async function bootstrap(): Promise<void> {
             event.clientY,
             currentRobotInfos(),
         );
+
         if (!pickedRobotName) {
             clearSelectedRobot();
             return;
@@ -334,6 +335,7 @@ export async function bootstrap(): Promise<void> {
         if (event.key !== 'Escape' || stopPlacementMode || !selectedRobotName) {
             return;
         }
+
         clearSelectedRobot();
     }
 
@@ -359,10 +361,12 @@ export async function bootstrap(): Promise<void> {
         replay.clearReplay();
         replayData = null;
         logs.clear();
+
         renderPreview(
             files.getRobotInfos(),
             files.getPreviewPlacements(),
         );
+
         dom.arenaOverlay.classList.add('hidden');
         updateSimulationUiState();
     }
@@ -375,11 +379,11 @@ export async function bootstrap(): Promise<void> {
         const simulationTicks = getSimulationTicks();
         const sceneLoadingStartedAt = performance.now();
         dom.sceneLoadingCover.classList.remove('hidden');
-
         dom.runBtn.disabled = true;
         dom.runBtn.textContent = 'Running...';
         dom.runBtn.classList.add('loading');
         logs.clear();
+
         logs.showLogsTab({
             tabBtns: dom.tabBtns,
             logTabBtn: dom.logTabBtn,
@@ -398,6 +402,7 @@ export async function bootstrap(): Promise<void> {
             }
 
             const replayPayload = result.replay;
+
             if (!replayPayload) {
                 logs.append('Error: Missing replay data from server', 'log-error');
                 return;
@@ -412,6 +417,7 @@ export async function bootstrap(): Promise<void> {
                 winnerTeam: result.winner_team ?? null,
                 totalTicks: result.total_ticks ?? replayPayload.ticks.length,
             };
+
             logs.setReplayData(replayData);
             updateSimulationUiState();
 
@@ -419,6 +425,7 @@ export async function bootstrap(): Promise<void> {
             destroy();
             dom.arenaContainer.innerHTML = '';
             dom.arenaOverlay.classList.add('hidden');
+
             await initArena(
                 dom.arenaContainer,
                 replayPayload.arena.width,
@@ -447,6 +454,7 @@ export async function bootstrap(): Promise<void> {
     function getSimulationTicks(): number {
         const raw = dom.simulationTicksInput.value.trim();
         const parsed = Number.parseInt(raw, 10);
+
         if (Number.isNaN(parsed)) {
             dom.simulationTicksInput.value = String(DEFAULT_SIMULATION_TICKS);
             return DEFAULT_SIMULATION_TICKS;

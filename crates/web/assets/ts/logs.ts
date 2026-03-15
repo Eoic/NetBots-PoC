@@ -155,11 +155,11 @@ export class LogPanel {
         const { winnerTeam, totalTicks, playerTeam } = replayData;
 
         if (winnerTeam != null && playerTeam != null && winnerTeam === playerTeam) {
-            this.matchResultEntry = { text: `--- You win! (${totalTicks} ticks) ---`, className: 'log-result-win' };
+            this.matchResultEntry = { text: `You win! (${totalTicks} ticks)`, className: 'log-result-win' };
         } else if (winnerTeam != null) {
-            this.matchResultEntry = { text: `--- You lose. (${totalTicks} ticks) ---`, className: 'log-result-lose' };
+            this.matchResultEntry = { text: `You lose. (${totalTicks} ticks)`, className: 'log-result-lose' };
         } else {
-            this.matchResultEntry = { text: `--- Draw. (${totalTicks} ticks) ---`, className: 'log-result-draw' };
+            this.matchResultEntry = { text: `Draw. (${totalTicks} ticks)`, className: 'log-result-draw' };
         }
 
         this.matchResultTickIndex = Math.max(0, replayData.ticks.length - 1);
@@ -181,6 +181,7 @@ export class LogPanel {
         for (const evt of events) {
             if (evt.Hit) {
                 const name = robotInfos[evt.Hit.robot_id]?.name || `robot-${evt.Hit.robot_id}`;
+
                 entries.push({
                     text: `[tick ${tick}] ${name} hit for ${evt.Hit.damage.toFixed(1)} damage`,
                     className: 'log-hit',
@@ -188,6 +189,7 @@ export class LogPanel {
                 });
             } else if (evt.RobotDied) {
                 const name = robotInfos[evt.RobotDied.robot_id]?.name || `robot-${evt.RobotDied.robot_id}`;
+
                 entries.push({
                     text: `[tick ${tick}] ${name} destroyed`,
                     className: 'log-death',
@@ -195,6 +197,7 @@ export class LogPanel {
                 });
             } else if (evt.Collision) {
                 const name = robotInfos[evt.Collision.robot_id]?.name || `robot-${evt.Collision.robot_id}`;
+
                 entries.push({
                     text: `[tick ${tick}] ${name} collision (${evt.Collision.kind})`,
                     className: 'log-collision',

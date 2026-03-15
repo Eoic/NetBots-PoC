@@ -68,7 +68,6 @@ export function createRobotVisual(
 ): { graphic: RobotGraphic; label: RobotLabel; state: RobotRenderState } {
     const info = robotInfos[index];
     const color = colorForRobot(index, robotInfos, theme, maxTeams);
-
     const graphic = new Graphics();
     graphic.circle(0, 0, robotSize);
     graphic.fill({ color, alpha: 0.3 });
@@ -80,12 +79,14 @@ export function createRobotVisual(
     viewport.addChild(graphic);
 
     const labelContainer = new Container();
+
     const textStyle = new TextStyle({
         fontSize: 11,
         fill: theme.textColorCss,
         fontFamily: 'JetBrains Mono, Roboto Mono, monospace',
         fontWeight: 'bold',
     });
+
     const text = new Text({ text: info.name, style: textStyle });
     text.anchor.set(0.5, 0);
     text.resolution = renderScale * 2;
@@ -100,12 +101,10 @@ export function createRobotVisual(
     const hpBar = new Graphics();
     hpBar.y = hpBg.y;
     labelContainer.addChild(hpBar);
-
     viewport.addChild(labelContainer);
 
     const label: RobotLabel = { container: labelContainer, text, hpBar, hpBg, color };
     const state: RobotRenderState = { x: 0, y: 0, heading: 0, alive: true };
-
     return { graphic: { graphic, color }, label, state };
 }
 
@@ -118,6 +117,7 @@ export function clearRobotVisuals(
         viewport.removeChild(robot.graphic);
         robot.graphic.destroy();
     }
+
     for (const label of robotLabels) {
         viewport.removeChild(label.container);
         label.container.destroy({ children: true });
@@ -127,13 +127,14 @@ export function clearRobotVisuals(
 export function updateHealthBar(label: RobotLabel, energy: number, theme: ArenaTheme): void {
     const pct = Math.max(0, Math.min(1, energy / 100));
     const barW = HP_BAR_WIDTH * pct;
-
     let barColor: number;
+
     if (pct > 0.5) barColor = label.color;
     else if (pct > 0.25) barColor = theme.hpWarningColor;
     else barColor = theme.hpDangerColor;
 
     label.hpBar.clear();
+
     if (barW > 0) {
         label.hpBar.roundRect(-HP_BAR_WIDTH / 2, 0, barW, HP_BAR_HEIGHT, 2);
         label.hpBar.fill(barColor);
@@ -156,9 +157,11 @@ export function pickRobotAtPoint(
         const dx = state.x - worldX;
         const dy = state.y - worldY;
         const distSq = dx * dx + dy * dy;
+
         if (distSq > hitRadiusSq || distSq >= closestDistanceSq) {
             continue;
         }
+
         closestIndex = i;
         closestDistanceSq = distSq;
     }

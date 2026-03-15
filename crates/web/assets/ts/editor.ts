@@ -22,7 +22,7 @@ function createEditorState(text: string): EditorState {
 export class CodeEditor {
     private editor: EditorView | null = null;
 
-    constructor(private readonly container: HTMLElement) {}
+    constructor(private readonly container: HTMLElement) { }
 
     create(): void {
         this.editor = new EditorView({
@@ -35,6 +35,7 @@ export class CodeEditor {
         if (!this.editor) {
             return;
         }
+
         this.editor.setState(createEditorState(text));
     }
 
@@ -42,6 +43,7 @@ export class CodeEditor {
         if (!this.editor) {
             return '';
         }
+
         return this.editor.state.doc.toString();
     }
 }

@@ -37,6 +37,7 @@ export function setupEditorResize(controls: ResizeControls): void {
 
     const clampEditorHeight = (): void => {
         const arenaRect = controls.arenaPanel.getBoundingClientRect();
+
         if (arenaRect.height <= 0) {
             return;
         }
@@ -58,7 +59,9 @@ export function setupEditorResize(controls: ResizeControls): void {
     });
 
     document.addEventListener('mousemove', (e) => {
-        if (!isResizing) return;
+        if (!isResizing)
+            return;
+
         const rect = controls.arenaPanel.getBoundingClientRect();
         const newHeight = rect.bottom - e.clientY + handleCenterOffset;
         const minHeight = handleCenterOffset;
@@ -71,6 +74,7 @@ export function setupEditorResize(controls: ResizeControls): void {
         if (!isResizing) {
             return;
         }
+
         isResizing = false;
         controls.resizeHandle.classList.remove('is-resizing');
         document.body.style.cursor = '';

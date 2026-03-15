@@ -1,12 +1,15 @@
 function requiredEl<T extends HTMLElement>(id: string): T {
     const element = document.getElementById(id);
+
     if (!element) {
         throw new Error(`Missing required element: #${id}`);
     }
+
     return element as T;
 }
 
 const logTabBtn = document.querySelector<HTMLButtonElement>('[data-tab="logs"]');
+
 if (!logTabBtn) {
     throw new Error('Missing required element: [data-tab="logs"]');
 }

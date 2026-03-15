@@ -24,11 +24,14 @@ export function setupManipulation(deps: ManipulationDeps): { teardown: () => voi
     let dragMoved = false;
 
     function onMouseDown(event: MouseEvent): void {
-        if (event.button !== 0 || !deps.isPreviewMode()) return;
+        if (event.button !== 0 || !deps.isPreviewMode())
+            return;
 
         const fileName = deps.getSelectedRobotFileName();
         const robotName = deps.getSelectedRobotName();
-        if (!fileName || !robotName) return;
+
+        if (!fileName || !robotName)
+            return;
 
         if (deps.hitTestRotationHandle(event.clientX, event.clientY)) {
             dragMode = 'rotate';
@@ -41,6 +44,7 @@ export function setupManipulation(deps: ManipulationDeps): { teardown: () => voi
         }
 
         const picked = deps.pickRobotNameAtClient(event.clientX, event.clientY);
+
         if (picked === robotName) {
             dragMode = 'move';
             dragRobotFileName = fileName;
@@ -52,10 +56,13 @@ export function setupManipulation(deps: ManipulationDeps): { teardown: () => voi
     }
 
     function onMouseMove(event: MouseEvent): void {
-        if (!dragMode || !dragRobotFileName) return;
+        if (!dragMode || !dragRobotFileName)
+            return;
 
         const worldPos = deps.worldPositionFromClient(event.clientX, event.clientY);
-        if (!worldPos) return;
+
+        if (!worldPos)
+            return;
 
         event.preventDefault();
         dragMoved = true;
@@ -106,6 +113,7 @@ export function setupManipulation(deps: ManipulationDeps): { teardown: () => voi
                 dragMoved = false;
                 return true;
             }
+
             return false;
         },
         teardown(): void {

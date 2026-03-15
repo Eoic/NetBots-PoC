@@ -35,11 +35,13 @@ export function startBotPlacementMode(
 
     const renderPendingPreview = (): void => {
         const placements = files.getPreviewPlacements();
+
         if (pendingPlacement) {
             placements[pendingName] = pendingPlacement;
             renderPreview([...baseRobotInfos, pendingRobotInfo], placements);
             return;
         }
+
         renderPreview(baseRobotInfos, placements);
     };
 
@@ -51,6 +53,7 @@ export function startBotPlacementMode(
         dom.addBotBtn.disabled = false;
         dom.templateSelect.disabled = false;
         dom.arenaOverlay.classList.add('hidden');
+
         if (restorePreview) {
             renderPreview(
                 files.getRobotInfos(),
@@ -61,37 +64,45 @@ export function startBotPlacementMode(
 
     const commitPlacement = (spawnX: number, spawnY: number): void => {
         files.setFile(filename, source);
+
         files.setPlacement(filename, {
             x: spawnX,
             y: spawnY,
             heading: DEFAULT_ENEMY_HEADING,
         });
+
         clearReplayData();
         replay.clearReplay();
         files.switchToFile(filename);
         cleanup(false);
+
         renderPreview(
             files.getRobotInfos(),
             files.getPreviewPlacements(),
         );
+
         updateSimulationUiState();
         onPlacementEnd();
     };
 
     const onMouseMove = (event: MouseEvent): void => {
         const spawn = worldPositionFromClient(event.clientX, event.clientY);
+
         if (!spawn) {
             if (pendingPlacement) {
                 pendingPlacement = null;
                 renderPendingPreview();
             }
+
             return;
         }
+
         pendingPlacement = {
             x: spawn.x,
             y: spawn.y,
             heading: DEFAULT_ENEMY_HEADING,
         };
+
         renderPendingPreview();
     };
 
@@ -99,12 +110,15 @@ export function startBotPlacementMode(
         if (event.button !== 0) {
             return;
         }
+
         const spawn = worldPositionFromClient(event.clientX, event.clientY);
+
         if (!spawn) {
             if (pendingPlacement) {
                 pendingPlacement = null;
                 renderPendingPreview();
             }
+
             return;
         }
 
@@ -117,6 +131,7 @@ export function startBotPlacementMode(
         if (event.key !== 'Escape') {
             return;
         }
+
         cleanup();
         onPlacementEnd();
     };

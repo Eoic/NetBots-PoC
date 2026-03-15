@@ -91,6 +91,7 @@ const TEAM_COLOR_FALLBACKS = [
     0x7f848e, 0x2bbac5, 0x8dc891, 0xff9e64,
     0x73daca, 0xb4befe, 0xf38ba8, 0xa6e3a1,
 ];
+
 let arenaTheme: ArenaTheme = buildArenaTheme();
 
 function readCssVar(name: string, fallback: string): string {
@@ -100,13 +101,17 @@ function readCssVar(name: string, fallback: string): string {
 
 function cssColorToNumber(color: string, fallback: number): number {
     const value = color.trim();
+
     if (value.startsWith('#')) {
         let hex = value.slice(1);
+
         if (hex.length === 3) {
             hex = hex.split('').map((char) => char + char).join('');
         }
+
         if (hex.length >= 6) {
             const parsed = Number.parseInt(hex.slice(0, 6), 16);
+
             if (!Number.isNaN(parsed)) {
                 return parsed;
             }
@@ -153,6 +158,7 @@ function defaultUnplacedPosition(index: number, worldWidth: number, worldHeight:
     const row = Math.floor(index / cols);
     const x = ROBOT_SIZE + 40 + (col * 120);
     const y = ROBOT_SIZE + 40 + (row * 100);
+
     return {
         x: Math.max(ROBOT_SIZE, Math.min(worldWidth - ROBOT_SIZE, x)),
         y: Math.max(ROBOT_SIZE, Math.min(worldHeight - ROBOT_SIZE, y)),
@@ -182,18 +188,23 @@ function clearRobotVisualsLocal(): void {
 
 function ensureRobotVisuals(robotInfos: RobotInfo[]): void {
     const nextSignature = buildRobotVisualSignature(robotInfos);
+
     if (nextSignature === robotVisualSignature) {
         return;
     }
 
     clearRobotVisualsLocal();
-    if (!viewport) return;
+
+    if (!viewport)
+        return;
+
     for (let i = 0; i < robotInfos.length; i++) {
         const result = createRobotVisual(viewport, arenaTheme, i, robotInfos, ROBOT_SIZE, RENDER_SCALE, MAX_TEAMS);
         robotGraphics.push(result.graphic);
         robotLabels.push(result.label);
         robotRenderStates.push(result.state);
     }
+
     robotVisualSignature = nextSignature;
 }
 
@@ -201,6 +212,7 @@ function ensureSelectionMarker(): void {
     if (!viewport) {
         return;
     }
+
     if (!selectionMarker) {
         selectionMarker = new Graphics();
         selectionMarker.visible = false;
@@ -209,7 +221,9 @@ function ensureSelectionMarker(): void {
 }
 
 function ensureRotationHandle(): void {
-    if (!viewport) return;
+    if (!viewport)
+        return;
+
     if (!rotationHandle) {
         rotationHandle = new Graphics();
         rotationHandle.visible = false;
@@ -223,6 +237,7 @@ function updateSelectionMarker(robotInfos: RobotInfo[]): void {
     if (!viewport || !selectionMarker) {
         return;
     }
+
     if (!selectedRobotName) {
         selectionMarker.visible = false;
         if (rotationHandle) rotationHandle.visible = false;
@@ -230,6 +245,7 @@ function updateSelectionMarker(robotInfos: RobotInfo[]): void {
     }
 
     const selectedIndex = robotInfos.findIndex((robot) => robot.name === selectedRobotName);
+
     if (selectedIndex < 0 || selectedIndex >= robotRenderStates.length) {
         selectionMarker.visible = false;
         if (rotationHandle) rotationHandle.visible = false;
@@ -272,8 +288,8 @@ export async function initArena(
 
     const screenWidth = container.clientWidth || width;
     const screenHeight = container.clientHeight || height;
-
     app = new Application();
+
     await app.init({
         width: screenWidth,
         height: screenHeight,
@@ -295,6 +311,7 @@ export async function initArena(
         worldHeight: height,
         events: app.renderer.events,
     });
+
     app.stage.addChild(viewport);
 
     viewport
@@ -306,9 +323,9 @@ export async function initArena(
 
     if (viewState) {
         const clampedScale = Math.max(0.5, Math.min(viewState.scale, 5));
-
         let centerX = viewState.centerX;
         let centerY = viewState.centerY;
+
         if (viewState.worldWidth > 0 && viewState.worldHeight > 0) {
             centerX = (viewState.centerX / viewState.worldWidth) * width;
             centerY = (viewState.centerY / viewState.worldHeight) * height;
@@ -327,17 +344,19 @@ export async function initArena(
     viewport.addChild(border);
 
     const grid = new Graphics();
+
     for (let x = GRID_SPACING; x < width; x += GRID_SPACING) {
         grid.moveTo(x, 0);
         grid.lineTo(x, height);
     }
+
     for (let y = GRID_SPACING; y < height; y += GRID_SPACING) {
         grid.moveTo(0, y);
         grid.lineTo(width, y);
     }
+
     grid.stroke({ color: arenaTheme.gridColor, width: 1 });
     viewport.addChild(grid);
-
     ensureSelectionMarker();
     ensureRotationHandle();
     ensureRobotVisuals(robotInfos);
@@ -356,8 +375,11 @@ export function renderPreview(
     ensureSelectionMarker();
     ensureRotationHandle();
     const view = viewport;
+
     robotInfos.forEach((info, i) => {
-        if (i >= robotGraphics.length) return;
+        if (i >= robotGraphics.length)
+            return;
+
         const { graphic } = robotGraphics[i];
 
         let x: number;
@@ -365,6 +387,7 @@ export function renderPreview(
         let heading: number;
         const previousState = robotRenderStates[i];
         const placement = placements[info.name];
+
         if (placement) {
             x = placement.x;
             y = placement.y;
@@ -385,6 +408,7 @@ export function renderPreview(
         graphic.rotation = -(heading * Math.PI) / 180;
         graphic.visible = true;
         graphic.alpha = 1.0;
+
         robotRenderStates[i] = {
             x,
             y,
@@ -403,6 +427,7 @@ export function renderPreview(
         view.removeChild(bullet);
         bullet.destroy();
     });
+
     bulletGraphics = [];
     updateSelectionMarker(robotInfos);
 }
@@ -413,6 +438,7 @@ export function worldPositionFromClient(clientX: number, clientY: number): { x: 
     }
 
     const bounds = app.canvas.getBoundingClientRect();
+
     if (
         clientX < bounds.left ||
         clientX > bounds.right ||
@@ -429,9 +455,11 @@ export function worldPositionFromClient(clientX: number, clientY: number): { x: 
     const maxX = viewport.worldWidth - ROBOT_SIZE;
     const minY = ROBOT_SIZE;
     const maxY = viewport.worldHeight - ROBOT_SIZE;
+
     if (point.x < minX || point.x > maxX || point.y < minY || point.y > maxY) {
         return null;
     }
+
     return { x: point.x, y: point.y };
 }
 
@@ -441,6 +469,7 @@ export function pickRobotNameAtClient(
     robotInfos: RobotInfo[],
 ): string | null {
     const worldPos = worldPositionFromClient(clientX, clientY);
+
     if (!worldPos) {
         return null;
     }
@@ -451,6 +480,7 @@ export function pickRobotNameAtClient(
 
 export function setSelectedRobot(name: string | null): void {
     selectedRobotName = name;
+
     if (!selectedRobotName && selectionMarker) {
         selectionMarker.visible = false;
     }
@@ -468,6 +498,7 @@ export function getRobotSceneInfo(name: string, robotInfos: RobotInfo[]): RobotS
     }
 
     const state = robotRenderStates[index];
+
     return {
         name,
         team: robotInfos[index].team,
@@ -483,7 +514,9 @@ export function renderTick(
     tickData: TickData,
     robotInfos: RobotInfo[],
 ): void {
-    if (!app || !viewport) return;
+    if (!app || !viewport)
+        return;
+
     previewModeActive = false;
     ensureRobotVisuals(robotInfos);
     ensureSelectionMarker();
@@ -491,7 +524,9 @@ export function renderTick(
     const view = viewport;
 
     tickData.robots.forEach((robot, i) => {
-        if (i >= robotGraphics.length) return;
+        if (i >= robotGraphics.length)
+            return;
+
         const { graphic } = robotGraphics[i];
         graphic.x = robot.x;
         graphic.y = robot.y;
@@ -499,6 +534,7 @@ export function renderTick(
         graphic.visible = true;
         graphic.alpha = robot.alive ? 1.0 : 0.35;
         graphic.tint = robot.alive ? 0xffffff : 0x808080;
+
         robotRenderStates[i] = {
             x: robot.x,
             y: robot.y,
@@ -518,6 +554,7 @@ export function renderTick(
         view.removeChild(bullet);
         bullet.destroy();
     });
+
     bulletGraphics = [];
 
     if (!tickData.bullets) {
@@ -528,10 +565,12 @@ export function renderTick(
     tickData.bullets.forEach((bullet) => {
         const graphic = new Graphics();
         const ownerIdx = bullet.owner_id;
+
         const color =
             ownerIdx < robotGraphics.length
                 ? robotGraphics[ownerIdx].color
                 : arenaTheme.bulletFallbackColor;
+
         graphic.circle(0, 0, 3);
         graphic.fill(color);
         graphic.x = bullet.x;
@@ -539,6 +578,7 @@ export function renderTick(
         view.addChild(graphic);
         bulletGraphics.push(graphic);
     });
+
     updateSelectionMarker(robotInfos);
 }
 
@@ -548,18 +588,22 @@ export function hitTestRotationHandle(clientX: number, clientY: number): boolean
     }
 
     const worldPos = worldPositionFromClient(clientX, clientY);
-    if (!worldPos) return false;
+
+    if (!worldPos)
+        return false;
 
     const selectedIdx = robotLabels.findIndex((label) => label.text.text === selectedRobotName);
-    if (selectedIdx < 0 || selectedIdx >= robotRenderStates.length) return false;
+
+    if (selectedIdx < 0 || selectedIdx >= robotRenderStates.length)
+        return false;
 
     const state = robotRenderStates[selectedIdx];
     const headingRad = -(state.heading * Math.PI) / 180;
     const hx = state.x + Math.cos(headingRad) * ROTATION_HANDLE_DIST;
     const hy = state.y + Math.sin(headingRad) * ROTATION_HANDLE_DIST;
-
     const dx = worldPos.x - hx;
     const dy = worldPos.y - hy;
+
     return (dx * dx + dy * dy) <= 10 * 10;
 }
 
@@ -576,7 +620,9 @@ export function resumeViewportDrag(): void {
 }
 
 export function destroy(): void {
-    if (!app) return;
+    if (!app)
+        return;
+
     app.destroy(true);
     app = null;
     viewport = null;

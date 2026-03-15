@@ -52,6 +52,7 @@ export class FileStore {
         if (!this.files.has(name)) {
             return;
         }
+
         this.placements.set(name, placement);
     }
 
@@ -61,10 +62,12 @@ export class FileStore {
         }
 
         const placements: Record<string, RobotPlacement> = {};
+
         for (const [name, placement] of this.placements) {
             const meta = this.getOrCreateMeta(name);
             placements[meta.name] = placement;
         }
+
         return placements;
     }
 
@@ -73,10 +76,12 @@ export class FileStore {
             if (!this.files.has(fileName)) {
                 continue;
             }
+
             if (meta.name === robotName) {
                 return fileName;
             }
         }
+
         return null;
     }
 
@@ -84,7 +89,9 @@ export class FileStore {
         if (!this.files.has(fileName)) {
             return null;
         }
+
         const meta = this.getOrCreateMeta(fileName);
+
         return {
             fileName,
             isPlayer: this.isPlayerFile(fileName),
@@ -102,9 +109,11 @@ export class FileStore {
         }
 
         const current = this.getOrCreateMeta(fileName);
+
         const nextName = updates.name === undefined
             ? current.name
             : this.getUniqueRobotName(fileName, updates.name.trim() || current.name);
+
         const nextTeam = updates.team === undefined
             ? current.team
             : Math.max(0, Math.min(MAX_TEAMS - 1, updates.team));
@@ -113,6 +122,7 @@ export class FileStore {
             name: nextName,
             team: nextTeam,
         });
+
         this.renderFileTree();
         return this.getRobotMeta(fileName);
     }
@@ -149,10 +159,13 @@ export class FileStore {
                 const canDelete = this.options.canDeleteEnemyBots();
                 const del = document.createElement('span');
                 del.className = `file-delete${canDelete ? '' : ' disabled'}`;
+
                 if (!canDelete) {
                     del.title = 'Clear simulation before removing bots';
                 }
+
                 del.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i>';
+
                 del.addEventListener('click', (e) => {
                     e.stopPropagation();
                     if (!this.options.canDeleteEnemyBots()) {
@@ -160,6 +173,7 @@ export class FileStore {
                     }
                     this.deleteFile(name);
                 });
+
                 div.appendChild(del);
             }
 
@@ -170,13 +184,16 @@ export class FileStore {
 
     getRobotInfos(): RobotInfo[] {
         const infos: RobotInfo[] = [];
+
         for (const [name] of this.files) {
             const meta = this.getOrCreateMeta(name);
+
             infos.push({
                 name: meta.name,
                 team: meta.team,
             });
         }
+
         return infos;
     }
 
@@ -186,6 +203,7 @@ export class FileStore {
 
         for (const [name, source] of this.files) {
             const meta = this.getOrCreateMeta(name);
+
             robots.push({
                 name: meta.name,
                 source,
@@ -199,7 +217,10 @@ export class FileStore {
 
     nextBotName(templateName: string): string {
         let count = 1;
-        while (this.files.has(`${templateName}-${count}.ts`)) count++;
+
+        while (this.files.has(`${templateName}-${count}.ts`))
+            count++;
+
         return `${templateName}-${count}.ts`;
     }
 
@@ -233,6 +254,7 @@ export class FileStore {
             name: this.getUniqueRobotName(fileName, fileName.replace('.ts', '')),
             team: this.isPlayerFile(fileName) ? 0 : 1,
         };
+
         this.robotMeta.set(fileName, created);
         return created;
     }
@@ -241,6 +263,7 @@ export class FileStore {
         if (!this.files.has(fileName) || this.placements.has(fileName)) {
             return;
         }
+
         this.placements.set(fileName, this.createDefaultPlacement(this.placements.size));
     }
 
@@ -249,6 +272,7 @@ export class FileStore {
         const row = Math.floor(index / DEFAULT_PLACEMENT_COLS);
         const baseX = ROBOT_RADIUS + 40 + (col * DEFAULT_PLACEMENT_STEP_X);
         const baseY = ROBOT_RADIUS + 40 + (row * DEFAULT_PLACEMENT_STEP_Y);
+
         return {
             x: Math.max(ROBOT_RADIUS, Math.min(DEFAULT_ARENA_WIDTH - ROBOT_RADIUS, baseX)),
             y: Math.max(ROBOT_RADIUS, Math.min(DEFAULT_ARENA_HEIGHT - ROBOT_RADIUS, baseY)),
@@ -258,19 +282,23 @@ export class FileStore {
 
     private getUniqueRobotName(fileName: string, preferredName: string): string {
         const base = preferredName.trim() || fileName.replace('.ts', '');
+
         const taken = new Set(
             Array.from(this.robotMeta.entries())
                 .filter(([otherFile]) => otherFile !== fileName && this.files.has(otherFile))
                 .map(([, meta]) => meta.name),
         );
+
         if (!taken.has(base)) {
             return base;
         }
 
         let suffix = 2;
+
         while (taken.has(`${base}-${suffix}`)) {
             suffix++;
         }
+
         return `${base}-${suffix}`;
     }
 
