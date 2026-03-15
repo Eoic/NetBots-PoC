@@ -58,15 +58,14 @@ pub fn run_events_phase(world: &mut GameWorld) -> (TickEvents, Vec<GameEvent>) {
         });
     }
 
-    // Remove hit bullets (reverse order to preserve indices)
     for &bi in bullets_to_remove.iter().rev() {
         if bi < world.bullets.len() {
             world.bullets.remove(bi);
         }
     }
 
-    // Robot-wall collisions
     let wall_collisions = detect_robot_wall_collisions(world);
+
     for wc in &wall_collisions {
         tick_events.collisions.push(CollisionEvent {
             robot_id: wc.robot_id,
@@ -80,10 +79,8 @@ pub fn run_events_phase(world: &mut GameWorld) -> (TickEvents, Vec<GameEvent>) {
         });
     }
 
-    // Robot-robot collisions
     let robot_collisions = detect_robot_robot_collisions(world);
     for rc in &robot_collisions {
-        // Both robots take 1 damage
         for &rid in &[rc.robot_a, rc.robot_b] {
             if let Some(robot) = world.robots.iter_mut().find(|r| r.id == rid) {
                 robot.energy -= 1.0;
@@ -92,31 +89,35 @@ pub fn run_events_phase(world: &mut GameWorld) -> (TickEvents, Vec<GameEvent>) {
                     game_events.push(GameEvent::RobotDied { robot_id: rid });
                 }
             }
+
             tick_events.collisions.push(CollisionEvent {
                 robot_id: rid,
                 kind: 1,
                 x: rc.x,
                 y: rc.y,
             });
+
             game_events.push(GameEvent::Collision {
                 robot_id: rid,
                 kind: "robot".to_string(),
             });
         }
 
-        // Push robots apart
         let (ax, ay) = {
             let a = &world.robots[rc.robot_a];
             (a.x, a.y)
         };
+
         let (bx, by) = {
             let b = &world.robots[rc.robot_b];
             (b.x, b.y)
         };
+
         let dx = bx - ax;
         let dy = by - ay;
         let dist = (dx * dx + dy * dy).sqrt().max(0.01);
         let overlap = ROBOT_RADIUS * 2.0 - dist;
+
         if overlap > 0.0 {
             let push = overlap / 2.0 + 0.5;
             let nx = dx / dist;
@@ -256,6 +257,8 @@ pub fn capture_snapshot(world: &GameWorld, events: Vec<GameEvent>) -> TickSnapsh
 
 /// Check win conditions and update game status.
 pub fn check_win(world: &mut GameWorld) {
+    const ENERGY_TIE_EPSILON: f64 = 1e-9;
+
     let alive_teams: std::collections::HashSet<u8> = world
         .robots
         .iter()
@@ -273,52 +276,23 @@ pub fn check_win(world: &mut GameWorld) {
         for robot in world.robots.iter().filter(|r| r.alive) {
             *team_energy.entry(robot.team).or_insert(0.0) += robot.energy;
         }
-        let winner_team = team_energy
-            .into_iter()
-            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-            .map(|(team, _)| team);
-        world.status = GameStatus::Finished { winner_team };
-    }
-}
 
-/// Compute scan result for a robot: distance to nearest enemy within ±SCAN_ARC_DEGREES of heading.
-pub fn compute_scan(world: &GameWorld, robot_id: usize) -> f64 {
-    let robot = &world.robots[robot_id];
-    if !robot.alive {
-        return -1.0;
-    }
+        let mut ranked_teams: Vec<(u8, f64)> = team_energy.into_iter().collect();
+        ranked_teams.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
-    let mut min_dist = f64::MAX;
-    let heading_rad = robot.heading.to_radians();
-
-    for other in &world.robots {
-        if other.team == robot.team || !other.alive {
-            continue;
-        }
-        let dx = other.x - robot.x;
-        let dy = -(other.y - robot.y); // Y-down → math coords
-        let angle_to = dy.atan2(dx);
-        let mut angle_diff = (heading_rad - angle_to).to_degrees();
-        // Normalize to [-180, 180]
-        while angle_diff > 180.0 {
-            angle_diff -= 360.0;
-        }
-        while angle_diff < -180.0 {
-            angle_diff += 360.0;
-        }
-
-        if angle_diff.abs() <= SCAN_ARC_DEGREES {
-            let dist = (dx * dx + dy * dy).sqrt();
-            if dist < min_dist {
-                min_dist = dist;
+        let winner_team = match ranked_teams.as_slice() {
+            [] => None,
+            [(team, _)] => Some(*team),
+            [(top_team, top_energy), (_, second_energy), ..] => {
+                if (top_energy - second_energy).abs() <= ENERGY_TIE_EPSILON {
+                    None
+                } else {
+                    Some(*top_team)
+                }
             }
-        }
-    }
+        };
 
-    if min_dist == f64::MAX {
-        -1.0
-    } else {
-        min_dist
+        world.status = GameStatus::Finished { winner_team };
     }
 }
 
@@ -367,6 +341,7 @@ pub(crate) fn test_world_2v2() -> GameWorld {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scan::compute_scan;
 
     #[test]
     fn test_robot_moves_forward() {
@@ -494,12 +469,79 @@ mod tests {
     }
 
     #[test]
+    fn test_timeout_win_uses_highest_team_energy() {
+        let mut world = GameWorld::new_with_max_ticks(
+            &[
+                RobotConfig {
+                    name: "bot-0".to_string(),
+                    team: 0,
+                    spawn: None,
+                },
+                RobotConfig {
+                    name: "bot-1".to_string(),
+                    team: 4,
+                    spawn: None,
+                },
+                RobotConfig {
+                    name: "bot-2".to_string(),
+                    team: 7,
+                    spawn: None,
+                },
+            ],
+            1,
+        );
+        world.robots[0].energy = 10.0;
+        world.robots[1].energy = 55.0;
+        world.robots[2].energy = 30.0;
+
+        let actions = vec![
+            PlayerActions::default(),
+            PlayerActions::default(),
+            PlayerActions::default(),
+        ];
+        run_tick(&mut world, &actions);
+
+        assert_eq!(
+            world.status,
+            GameStatus::Finished {
+                winner_team: Some(4)
+            }
+        );
+    }
+
+    #[test]
+    fn test_timeout_tie_results_in_draw() {
+        let mut world = GameWorld::new_with_max_ticks(
+            &[
+                RobotConfig {
+                    name: "bot-0".to_string(),
+                    team: 2,
+                    spawn: None,
+                },
+                RobotConfig {
+                    name: "bot-1".to_string(),
+                    team: 9,
+                    spawn: None,
+                },
+            ],
+            1,
+        );
+        world.robots[0].energy = 42.0;
+        world.robots[1].energy = 42.0;
+
+        let actions = vec![PlayerActions::default(), PlayerActions::default()];
+        run_tick(&mut world, &actions);
+
+        assert_eq!(world.status, GameStatus::Finished { winner_team: None });
+    }
+
+    #[test]
     fn test_scan_finds_enemy_in_arc() {
         let world = test_world_2v2();
-        // Robot 0 at x=100 heading 0°, Robot 1 at x=550 — directly ahead
+        // Robot 0 and Robot 1 are placed in separate team columns, directly ahead.
         let dist = compute_scan(&world, 0);
         assert!(dist > 0.0);
-        assert!((dist - 450.0).abs() < 1.0);
+        assert!((dist - 400.0).abs() < 1.0);
     }
 
     #[test]
@@ -533,7 +575,7 @@ mod tests {
         world.bullets.push(Bullet {
             owner_id: 0,
             owner_team: 0,
-            x: 799.0,
+            x: world.arena_width - 1.0,
             y: 300.0,
             heading: 0.0,
             speed: BULLET_SPEED,
