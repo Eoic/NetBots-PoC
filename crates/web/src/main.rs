@@ -1,6 +1,7 @@
 mod compiler;
 mod match_runner;
 mod routes;
+mod validation;
 
 use axum::routing::{get, post};
 use axum::Router;
