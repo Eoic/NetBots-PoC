@@ -1,6 +1,6 @@
 # NetBots
 
-A proof of concept robot battle simulator.
+A proof of concept robot battle simulator (part of [https://github.com/Eoic/NetBots](https://github.com/Eoic/NetBots)).
 
 ![NetBots](./public/demo.png)
 
