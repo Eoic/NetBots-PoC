@@ -73,21 +73,19 @@ export class FileStore {
     private dragOffsetY = 0;
 
     constructor(private readonly options: FileStoreOptions) {
-        this.options.fileTreeEl.addEventListener('contextmenu', (e) => {
-            const target = e.target as HTMLElement;
+        this.options.fileTreeEl.addEventListener('contextmenu', (event) => {
+            const target = event.target as HTMLElement;
             const row = target.closest('.tree-row') as HTMLElement | null;
 
             if (!row) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.showEmptyAreaContextMenu(e.clientX, e.clientY);
+                event.preventDefault();
+                event.stopPropagation();
+                this.showEmptyAreaContextMenu(event.clientX, event.clientY);
             }
         });
 
         this.setupDropOnRoot();
     }
-
-    // --- File CRUD ---
 
     setFile(name: string, source: string): void {
         this.files.set(name, source);
@@ -99,9 +97,9 @@ export class FileStore {
     }
 
     createFile(path: string, content: string = ''): void {
+        const parent = dirname(path);
         this.files.set(path, content);
 
-        const parent = dirname(path);
         if (parent) {
             this.emptyDirs.delete(parent);
         }
@@ -135,10 +133,10 @@ export class FileStore {
         }
     }
 
-    // --- Entrypoint management ---
-
     markEntrypoint(path: string): void {
-        if (!this.files.has(path)) return;
+        if (!this.files.has(path)) {
+            return;
+        }
 
         this.entrypoints.add(path);
         this.getOrCreateMeta(path);
@@ -158,8 +156,6 @@ export class FileStore {
         return this.entrypoints.has(path);
     }
 
-    // --- Placement & meta ---
-
     setPlacement(name: string, placement: RobotPlacement): void {
         if (!this.files.has(name)) return;
         this.placements.set(name, placement);
@@ -173,7 +169,10 @@ export class FileStore {
         const placements: Record<string, RobotPlacement> = {};
 
         for (const [path, placement] of this.placements) {
-            if (!this.entrypoints.has(path)) continue;
+            if (!this.entrypoints.has(path)) {
+                continue;
+            }
+
             const meta = this.getOrCreateMeta(path);
             placements[meta.name] = placement;
         }
@@ -191,9 +190,12 @@ export class FileStore {
     }
 
     getRobotMeta(fileName: string): EditableRobotMeta | null {
-        if (!this.files.has(fileName)) return null;
+        if (!this.files.has(fileName)) {
+            return null;
+        }
 
         const meta = this.getOrCreateMeta(fileName);
+
         return {
             fileName,
             isPlayer: this.isFirstEntrypoint(fileName),
@@ -206,7 +208,9 @@ export class FileStore {
         fileName: string,
         updates: { name?: string; team?: number },
     ): EditableRobotMeta | null {
-        if (!this.files.has(fileName)) return null;
+        if (!this.files.has(fileName)) {
+            return null;
+        }
 
         const current = this.getOrCreateMeta(fileName);
 
@@ -223,8 +227,6 @@ export class FileStore {
         return this.getRobotMeta(fileName);
     }
 
-    // --- Editor integration ---
-
     saveCurrentFile(): void {
         if (this.activeFile && this.files.has(this.activeFile)) {
             this.files.set(this.activeFile, this.options.editor.getContent());
@@ -239,8 +241,6 @@ export class FileStore {
         this.options.editor.setContent(this.files.get(filename) || '', filename);
         this.renderFileTree();
     }
-
-    // --- Data access ---
 
     getRobotInfos(): RobotInfo[] {
         const infos: RobotInfo[] = [];
@@ -258,15 +258,20 @@ export class FileStore {
         this.saveCurrentFile();
 
         const files: Record<string, string> = {};
+
         for (const [path, content] of this.files) {
             files[path] = content;
         }
 
         const robots = [];
+
         for (const path of this.entrypoints) {
-            if (!this.files.has(path)) continue;
+            if (!this.files.has(path)) {
+                continue;
+            }
 
             const meta = this.getOrCreateMeta(path);
+
             robots.push({
                 name: meta.name,
                 file: path,
@@ -284,25 +289,26 @@ export class FileStore {
         return `${templateName}-${count}.ts`;
     }
 
-    // --- Tree rendering ---
-
     renderFileTree(): void {
-        const el = this.options.fileTreeEl;
-        el.textContent = '';
+        const element = this.options.fileTreeEl;
+        element.textContent = '';
 
         const tree = buildTree(this.files, this.emptyDirs, this.entrypoints);
+
         for (const node of tree) {
-            el.appendChild(this.renderNode(node, 0));
+            element.appendChild(this.renderNode(node, 0));
         }
 
         const emptyArea = document.createElement('div');
         emptyArea.className = 'tree-empty-area';
-        emptyArea.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.showEmptyAreaContextMenu(e.clientX, e.clientY);
+
+        emptyArea.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.showEmptyAreaContextMenu(event.clientX, event.clientY);
         });
-        el.appendChild(emptyArea);
+
+        element.appendChild(emptyArea);
     }
 
     promptNewFileAtRoot(): void {
@@ -312,8 +318,6 @@ export class FileStore {
     promptNewFolderAtRoot(): void {
         this.promptNewFolder('');
     }
-
-    // --- Private: file/directory operations ---
 
     private renameFile(oldPath: string, newPath: string): void {
         const content = this.files.get(oldPath)!;
@@ -349,6 +353,7 @@ export class FileStore {
         }
 
         const filesToMove: [string, string][] = [];
+
         for (const [filePath] of this.files) {
             if (filePath === oldPath || isDescendant(oldPath, filePath)) {
                 filesToMove.push([filePath, newPath + filePath.slice(oldPath.length)]);
@@ -378,6 +383,7 @@ export class FileStore {
 
     private deleteDirectory(path: string): void {
         const pathsToDelete: string[] = [];
+
         for (const [filePath] of this.files) {
             if (isDescendant(path, filePath)) {
                 pathsToDelete.push(filePath);
@@ -391,11 +397,13 @@ export class FileStore {
         }
 
         this.emptyDirs.delete(path);
+
         for (const dir of this.emptyDirs) {
             if (isDescendant(path, dir)) {
                 this.emptyDirs.delete(dir);
             }
         }
+
         this.collapsedDirs.delete(path);
 
         if (this.activeFile && !this.files.has(this.activeFile)) {
@@ -429,8 +437,6 @@ export class FileStore {
             console.error('onFilesChanged failed:', err);
         });
     }
-
-    // --- Private: tree node rendering ---
 
     private renderNode(node: TreeNode, depth: number): HTMLElement {
         const container = document.createElement('div');
@@ -493,17 +499,16 @@ export class FileStore {
             this.renderFileTree();
         });
 
-        row.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.showDirectoryContextMenu(e.clientX, e.clientY, node);
+        row.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.showDirectoryContextMenu(event.clientX, event.clientY, node);
         });
     }
 
     private renderFileRow(row: HTMLElement, node: TreeNode): void {
         this.setupDraggable(row, node);
 
-        // Spacer for alignment with directory toggle
         const spacer = document.createElement('span');
         spacer.className = 'tree-toggle';
         row.appendChild(spacer);
@@ -524,13 +529,12 @@ export class FileStore {
 
         const nameSpan = this.createNameSpan(row, node);
         row.appendChild(nameSpan);
-
         row.addEventListener('click', () => this.switchToFile(node.path));
 
-        row.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.showFileContextMenu(e.clientX, e.clientY, node);
+        row.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.showFileContextMenu(event.clientX, event.clientY, node);
         });
     }
 
@@ -539,15 +543,13 @@ export class FileStore {
         nameSpan.className = 'tree-name';
         nameSpan.textContent = node.name;
 
-        nameSpan.addEventListener('dblclick', (e) => {
-            e.stopPropagation();
+        nameSpan.addEventListener('dblclick', (event) => {
+            event.stopPropagation();
             this.startInlineRename(row, node, nameSpan);
         });
 
         return nameSpan;
     }
-
-    // --- Private: context menus ---
 
     private showFileContextMenu(x: number, y: number, node: TreeNode): void {
         const items: ContextMenuItem[] = [
@@ -600,14 +602,11 @@ export class FileStore {
         ]);
     }
 
-    // --- Private: inline rename & creation ---
-
     private startInlineRename(row: HTMLElement, node: TreeNode, nameSpan: HTMLElement): void {
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'tree-rename-input';
         input.value = node.name;
-
         nameSpan.replaceWith(input);
         input.focus();
 
@@ -622,7 +621,9 @@ export class FileStore {
             const newName = input.value.trim();
             input.replaceWith(nameSpan);
 
-            if (!newName || newName === node.name) return;
+            if (!newName || newName === node.name) {
+                return;
+            }
 
             const parent = dirname(node.path);
             const newPath = parent ? joinPath(parent, newName) : newName;
@@ -635,12 +636,12 @@ export class FileStore {
 
         input.addEventListener('blur', commit);
 
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
                 input.blur();
-            } else if (e.key === 'Escape') {
-                e.preventDefault();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
                 input.removeEventListener('blur', commit);
                 cancel();
             }
@@ -653,6 +654,7 @@ export class FileStore {
         const row = this.options.fileTreeEl.querySelector(
             `.tree-row[data-path="${CSS.escape(node.path)}"]`,
         ) as HTMLElement | null;
+
         const nameEl = row?.querySelector('.tree-name') as HTMLElement | null;
 
         if (row && nameEl) {
@@ -729,12 +731,12 @@ export class FileStore {
 
         input.addEventListener('blur', commit);
 
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
                 input.blur();
-            } else if (e.key === 'Escape') {
-                e.preventDefault();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
                 input.removeEventListener('blur', commit);
                 cancel();
             }
@@ -764,25 +766,23 @@ export class FileStore {
         return { container: el, before: emptyArea as HTMLElement | null };
     }
 
-    // --- Private: drag and drop ---
-
     private setupDraggable(row: HTMLElement, node: TreeNode): void {
         row.draggable = true;
 
-        row.addEventListener('dragstart', (e) => {
-            if (!e.dataTransfer) return;
+        row.addEventListener('dragstart', (event) => {
+            if (!event.dataTransfer) return;
 
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData(DRAG_MIME_TYPE, node.path);
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData(DRAG_MIME_TYPE, node.path);
 
             const rect = row.getBoundingClientRect();
-            this.dragOffsetX = e.clientX - rect.left;
-            this.dragOffsetY = e.clientY - rect.top;
+            this.dragOffsetX = event.clientX - rect.left;
+            this.dragOffsetY = event.clientY - rect.top;
 
             const blank = document.createElement('canvas');
             blank.width = 1;
             blank.height = 1;
-            e.dataTransfer.setDragImage(blank, 0, 0);
+            event.dataTransfer.setDragImage(blank, 0, 0);
 
             const ghost = row.cloneNode(true) as HTMLElement;
             ghost.classList.remove('active');
@@ -794,17 +794,17 @@ export class FileStore {
             row.classList.add('dragging');
         });
 
-        row.addEventListener('drag', (e) => {
+        row.addEventListener('drag', (event) => {
             if (!this.dragGhost) return;
 
-            if (e.clientX === 0 && e.clientY === 0) {
+            if (event.clientX === 0 && event.clientY === 0) {
                 this.dragGhost.style.display = 'none';
                 return;
             }
 
             this.dragGhost.style.display = '';
-            this.dragGhost.style.left = `${e.clientX - this.dragOffsetX}px`;
-            this.dragGhost.style.top = `${e.clientY - this.dragOffsetY}px`;
+            this.dragGhost.style.left = `${event.clientX - this.dragOffsetX}px`;
+            this.dragGhost.style.top = `${event.clientY - this.dragOffsetY}px`;
         });
 
         row.addEventListener('dragend', () => {
@@ -818,17 +818,20 @@ export class FileStore {
     private setupDirectoryDropTarget(row: HTMLElement, node: TreeNode): void {
         let dragOverCount = 0;
 
-        row.addEventListener('dragover', (e) => {
-            if (!this.hasDragData(e)) return;
+        row.addEventListener('dragover', (event) => {
+            if (!this.hasDragData(event)) return;
 
-            e.preventDefault();
-            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+            event.preventDefault();
+
+            if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = 'move';
+            }
         });
 
-        row.addEventListener('dragenter', (e) => {
-            if (!this.hasDragData(e)) return;
+        row.addEventListener('dragenter', (event) => {
+            if (!this.hasDragData(event)) return;
 
-            e.preventDefault();
+            event.preventDefault();
             dragOverCount++;
             row.classList.add('drop-target');
         });
@@ -842,12 +845,12 @@ export class FileStore {
             }
         });
 
-        row.addEventListener('drop', (e) => {
-            e.preventDefault();
+        row.addEventListener('drop', (event) => {
+            event.preventDefault();
             dragOverCount = 0;
             row.classList.remove('drop-target');
 
-            const sourcePath = e.dataTransfer?.getData(DRAG_MIME_TYPE);
+            const sourcePath = event.dataTransfer?.getData(DRAG_MIME_TYPE);
             if (!sourcePath || !this.isValidDrop(sourcePath, node.path)) return;
 
             this.collapsedDirs.delete(node.path);
@@ -858,21 +861,21 @@ export class FileStore {
     private setupDropOnRoot(): void {
         const el = this.options.fileTreeEl;
 
-        const isOverDirectory = (e: DragEvent): boolean => {
-            const target = e.target as HTMLElement;
+        const isOverDirectory = (event: DragEvent): boolean => {
+            const target = event.target as HTMLElement;
             return !!target.closest('.tree-row[data-dir]');
         };
 
-        el.addEventListener('dragover', (e) => {
-            if (isOverDirectory(e)) {
+        el.addEventListener('dragover', (event) => {
+            if (isOverDirectory(event)) {
                 el.classList.remove('drop-target-root');
                 return;
             }
 
-            if (!this.hasDragData(e)) return;
+            if (!this.hasDragData(event)) return;
 
-            e.preventDefault();
-            if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+            event.preventDefault();
+            if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
             el.classList.add('drop-target-root');
         });
 
@@ -884,12 +887,12 @@ export class FileStore {
             }
         });
 
-        el.addEventListener('drop', (e) => {
+        el.addEventListener('drop', (event) => {
             el.classList.remove('drop-target-root');
-            if (isOverDirectory(e)) return;
+            if (isOverDirectory(event)) return;
 
-            e.preventDefault();
-            const sourcePath = e.dataTransfer?.getData(DRAG_MIME_TYPE);
+            event.preventDefault();
+            const sourcePath = event.dataTransfer?.getData(DRAG_MIME_TYPE);
             if (!sourcePath || !this.isValidDrop(sourcePath, '')) return;
 
             this.movePath(sourcePath, '');
@@ -900,13 +903,15 @@ export class FileStore {
         const name = basename(sourcePath);
         const newPath = targetDir ? joinPath(targetDir, name) : name;
 
-        if (sourcePath === newPath) return;
+        if (sourcePath === newPath) {
+            return;
+        }
 
         this.renamePath(sourcePath, newPath);
     }
 
-    private hasDragData(e: DragEvent): boolean {
-        return !!e.dataTransfer?.types.includes(DRAG_MIME_TYPE);
+    private hasDragData(event: DragEvent): boolean {
+        return !!event.dataTransfer?.types.includes(DRAG_MIME_TYPE);
     }
 
     private isValidDrop(sourcePath: string, targetDir: string): boolean {
@@ -923,8 +928,6 @@ export class FileStore {
             el.classList.remove('drop-target');
         }
     }
-
-    // --- Private: helpers ---
 
     private getFirstEntrypoint(): string | null {
         for (const path of this.entrypoints) {
@@ -982,7 +985,9 @@ export class FileStore {
                 .map(([, meta]) => meta.name),
         );
 
-        if (!taken.has(base)) return base;
+        if (!taken.has(base)) {
+            return base;
+        }
 
         let suffix = 2;
         while (taken.has(`${base}-${suffix}`)) suffix++;

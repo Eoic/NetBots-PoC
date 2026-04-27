@@ -67,12 +67,15 @@ export async function bootstrap(): Promise<void> {
         scrubber: dom.scrubber,
         tickDisplay: dom.tickDisplay,
         speedBtns: dom.speedBtns,
+
         onRenderTick: (tick, robotInfos) => {
             renderTick(tick, robotInfos);
             updateSelectedRobotPanel();
         },
+
         onLogTickEvents: (tick, tickIndex, events, robotInfos) =>
             logs.logTickEvents(tick, tickIndex, events, robotInfos),
+
         onLogMatchResult: (data) => logs.logMatchResult(data),
     });
 
@@ -85,12 +88,15 @@ export async function bootstrap(): Promise<void> {
             replayData = null;
             replay.clearReplay();
             refreshSelectedRobotFromMeta();
+
             renderPreview(
                 files.getRobotInfos(),
                 files.getPreviewPlacements(),
             );
+
             updateSimulationUiState();
         },
+
         canDeleteEnemyBots: () => replayData === null,
     });
 
@@ -446,8 +452,8 @@ export async function bootstrap(): Promise<void> {
             );
 
             replay.setReplay(replayData);
-        } catch (e: unknown) {
-            logs.append(`Error: ${e instanceof Error ? e.message : String(e)}`, 'log-error');
+        } catch (error: unknown) {
+            logs.append(`Error: ${error instanceof Error ? error.message : String(error)}`, 'log-error');
         } finally {
             await ensureMinDuration(sceneLoadingStartedAt, SCENE_LOADING_MIN_MS);
             dom.sceneLoadingCover.classList.add('hidden');

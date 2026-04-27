@@ -53,8 +53,9 @@ impl RobotRunner {
     }
 
     fn handle_call_result(&mut self, context: &str, result: anyhow::Result<()>) {
-        if let Err(e) = result {
-            if e.downcast_ref::<Trap>()
+        if let Err(error) = result {
+            if error
+                .downcast_ref::<Trap>()
                 .is_some_and(|t| *t == Trap::OutOfFuel)
             {
                 eprintln!(
@@ -63,7 +64,10 @@ impl RobotRunner {
                     context
                 );
             } else {
-                self.store.data_mut().logs.push(format!("WASM trap: {}", e));
+                self.store
+                    .data_mut()
+                    .logs
+                    .push(format!("WASM trap: {}", error));
                 self.store.data_mut().trapped = true;
             }
         }
@@ -96,6 +100,7 @@ impl RobotRunner {
             &mut self.store,
             (tick, energy, x, y, heading, speed, gun_heat),
         );
+
         self.handle_call_result(&format!("tick {}", tick), result);
 
         Ok(self.store.data().actions.clone())
@@ -103,9 +108,11 @@ impl RobotRunner {
 
     pub fn call_on_hit(&mut self, damage: f64) -> Result<Vec<RobotAction>> {
         self.store.data_mut().clear_actions();
+
         if !self.has_on_hit {
             return Ok(self.store.data().actions.clone());
         }
+
         self.refuel()?;
 
         let on_hit = self
@@ -114,15 +121,16 @@ impl RobotRunner {
 
         let result = on_hit.call(&mut self.store, (damage,));
         self.handle_call_result("on_hit", result);
-
         Ok(self.store.data().actions.clone())
     }
 
     pub fn call_on_collision(&mut self, kind: i32, x: f64, y: f64) -> Result<Vec<RobotAction>> {
         self.store.data_mut().clear_actions();
+
         if !self.has_on_collision {
             return Ok(self.store.data().actions.clone());
         }
+
         self.refuel()?;
 
         let on_collision = self

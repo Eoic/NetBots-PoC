@@ -8,6 +8,7 @@ pub fn validate_wasm_exports(module: &Module) -> anyhow::Result<()> {
 
     for name in &required_exports {
         let found = module.exports().any(|e| e.name() == *name);
+
         if !found {
             anyhow::bail!("WASM module missing required export: {}", name);
         }

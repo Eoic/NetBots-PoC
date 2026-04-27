@@ -49,8 +49,6 @@ pub struct GameWorld {
 }
 
 impl GameWorld {
-    /// Create a new game world. Invariant: `robot.id == index in self.robots`.
-    /// Collision structs store robot IDs which are used as direct vector indices.
     pub fn new(configs: &[RobotConfig]) -> Self {
         Self::new_with_max_ticks(configs, MAX_TICKS)
     }
@@ -64,6 +62,7 @@ impl GameWorld {
 
         let mut team_order: Vec<u8> = Vec::new();
         let mut team_members: HashMap<u8, Vec<usize>> = HashMap::new();
+
         for (idx, config) in configs.iter().enumerate() {
             if !team_members.contains_key(&config.team) {
                 team_order.push(config.team);
@@ -73,37 +72,51 @@ impl GameWorld {
 
         let team_count = team_order.len().max(1);
         let mut team_default_x: HashMap<u8, f64> = HashMap::new();
+
         for (team_rank, team) in team_order.iter().enumerate() {
             let x = ARENA_WIDTH * (team_rank as f64 + 1.0) / (team_count as f64 + 1.0);
             team_default_x.insert(*team, x);
         }
 
         let mut robots = vec![None; configs.len()];
+
         for team in team_order {
             let members = team_members.get(&team).expect("Team members should exist");
+
             let default_x = *team_default_x
                 .get(&team)
                 .expect("Team default x should exist");
+
             let default_heading = if default_x <= ARENA_WIDTH / 2.0 {
                 0.0
             } else {
                 180.0
             };
+
             for (row_index, &config_i) in members.iter().enumerate() {
-                let c = &configs[config_i];
+                let config = &configs[config_i];
+
                 robots[config_i] = Some(Robot {
                     id: config_i,
-                    name: c.name.clone(),
-                    team: c.team,
-                    x: c.spawn.as_ref().map(|spawn| spawn.x).unwrap_or(default_x),
-                    y: c.spawn.as_ref().map(|spawn| spawn.y).unwrap_or(
+                    name: config.name.clone(),
+                    team: config.team,
+
+                    x: config
+                        .spawn
+                        .as_ref()
+                        .map(|spawn| spawn.x)
+                        .unwrap_or(default_x),
+
+                    y: config.spawn.as_ref().map(|spawn| spawn.y).unwrap_or(
                         ARENA_HEIGHT * (row_index as f64 + 1.0) / (members.len() as f64 + 1.0),
                     ),
-                    heading: c
+
+                    heading: config
                         .spawn
                         .as_ref()
                         .and_then(|spawn| spawn.heading)
                         .unwrap_or(default_heading),
+
                     speed: 0.0,
                     energy: STARTING_ENERGY,
                     gun_heat: STARTING_GUN_HEAT,
@@ -228,11 +241,9 @@ mod tests {
         ]);
 
         assert_eq!(world.robots.len(), 3);
-
         assert!((world.robots[0].x - (ARENA_WIDTH * 1.0 / 4.0)).abs() < 0.001);
         assert!((world.robots[1].x - (ARENA_WIDTH * 2.0 / 4.0)).abs() < 0.001);
         assert!((world.robots[2].x - (ARENA_WIDTH * 3.0 / 4.0)).abs() < 0.001);
-
         assert_eq!(world.robots[0].heading, 0.0);
         assert_eq!(world.robots[1].heading, 0.0);
         assert_eq!(world.robots[2].heading, 180.0);

@@ -1,16 +1,16 @@
 use crate::collision::*;
 use crate::world::*;
 
-/// Represents collision events that occurred during a tick, to be passed to WASM callbacks.
+/// Represents collision events that occurred during a tick to be passed to WASM callbacks.
 #[derive(Debug, Clone)]
 pub struct CollisionEvent {
     pub robot_id: usize,
-    pub kind: i32, // 0=wall, 1=robot
+    pub kind: i32,
     pub x: f64,
     pub y: f64,
 }
 
-/// Represents hit events that occurred during a tick, to be passed to WASM callbacks.
+/// Represents hit events that occurred during a tick to be passed to WASM callbacks.
 #[derive(Debug, Clone)]
 pub struct HitEvent {
     pub robot_id: usize,
@@ -42,19 +42,28 @@ fn process_bullet_hits(
     game_events: &mut Vec<GameEvent>,
 ) {
     let bullet_hits = detect_bullet_robot_collisions(world);
-    let mut bullets_to_remove: Vec<usize> = bullet_hits.iter().map(|h| h.bullet_index).collect();
+
+    let mut bullets_to_remove: Vec<usize> =
+        bullet_hits.iter().map(|hit| hit.bullet_index).collect();
+
     bullets_to_remove.sort_unstable();
     bullets_to_remove.dedup();
 
     for hit in &bullet_hits {
-        if let Some(robot) = world.robots.iter_mut().find(|r| r.id == hit.robot_id) {
+        if let Some(robot) = world.robots.iter_mut().find(|item| item.id == hit.robot_id) {
             robot.energy -= hit.damage;
+
             if robot.energy <= 0.0 {
                 robot.alive = false;
                 game_events.push(GameEvent::RobotDied { robot_id: robot.id });
             }
         }
-        if let Some(shooter) = world.robots.iter_mut().find(|r| r.id == hit.shooter_id) {
+
+        if let Some(shooter) = world
+            .robots
+            .iter_mut()
+            .find(|item| item.id == hit.shooter_id)
+        {
             shooter.energy += hit.power * HIT_REWARD_MULTIPLIER;
         }
 
@@ -62,6 +71,7 @@ fn process_bullet_hits(
             robot_id: hit.robot_id,
             damage: hit.damage,
         });
+
         game_events.push(GameEvent::Hit {
             robot_id: hit.robot_id,
             damage: hit.damage,
@@ -89,6 +99,7 @@ fn process_wall_collisions(
             x: wc.x,
             y: wc.y,
         });
+
         game_events.push(GameEvent::Collision {
             robot_id: wc.robot_id,
             kind: "wall".to_string(),
@@ -102,10 +113,12 @@ fn process_robot_collisions(
     game_events: &mut Vec<GameEvent>,
 ) {
     let robot_collisions = detect_robot_robot_collisions(world);
+
     for rc in &robot_collisions {
         for &rid in &[rc.robot_a, rc.robot_b] {
             if let Some(robot) = world.robots.iter_mut().find(|r| r.id == rid) {
                 robot.energy -= ROBOT_COLLISION_DAMAGE;
+
                 if robot.energy <= 0.0 {
                     robot.alive = false;
                     game_events.push(GameEvent::RobotDied { robot_id: rid });
@@ -174,18 +187,23 @@ pub fn run_resolution_phase(
                     world.robots[i].speed = speed.clamp(-MAX_BACKWARD_SPEED, MAX_FORWARD_SPEED);
                     speed_set = true;
                 }
+
                 RobotAction::Rotate(angle) if !rotated => {
                     let clamped = angle.clamp(-MAX_ROTATION_PER_TICK, MAX_ROTATION_PER_TICK);
                     world.robots[i].heading = (world.robots[i].heading + clamped) % 360.0;
+
                     if world.robots[i].heading < 0.0 {
                         world.robots[i].heading += 360.0;
                     }
+
                     rotated = true;
                 }
+
                 RobotAction::Shoot(power) if !shot && world.robots[i].gun_heat <= 0.0 => {
                     let power = power.clamp(MIN_BULLET_POWER, MAX_BULLET_POWER);
                     let robot = &world.robots[i];
                     let heading_rad = robot.heading.to_radians();
+
                     world.bullets.push(Bullet {
                         owner_id: robot.id,
                         owner_team: robot.team,
@@ -195,6 +213,7 @@ pub fn run_resolution_phase(
                         speed: BULLET_SPEED,
                         power,
                     });
+
                     world.robots[i].gun_heat = GUN_HEAT_BASE + power / GUN_HEAT_POWER_DIVISOR;
                     game_events.push(GameEvent::ShotFired { robot_id: i });
                     shot = true;
@@ -213,6 +232,7 @@ pub fn run_physics_phase(world: &mut GameWorld) {
         if !robot.alive {
             continue;
         }
+
         let heading_rad = robot.heading.to_radians();
         robot.x += heading_rad.cos() * robot.speed;
         robot.y -= heading_rad.sin() * robot.speed;
@@ -220,6 +240,7 @@ pub fn run_physics_phase(world: &mut GameWorld) {
         robot.x = robot
             .x
             .clamp(ROBOT_RADIUS, world.arena_width - ROBOT_RADIUS);
+
         robot.y = robot
             .y
             .clamp(ROBOT_RADIUS, world.arena_height - ROBOT_RADIUS);
@@ -242,6 +263,7 @@ pub fn run_physics_phase(world: &mut GameWorld) {
 pub fn capture_snapshot(world: &GameWorld, events: Vec<GameEvent>) -> TickSnapshot {
     TickSnapshot {
         tick: world.tick,
+
         robots: world
             .robots
             .iter()
@@ -256,6 +278,7 @@ pub fn capture_snapshot(world: &GameWorld, events: Vec<GameEvent>) -> TickSnapsh
                 alive: r.alive,
             })
             .collect(),
+
         bullets: world
             .bullets
             .iter()
@@ -266,6 +289,7 @@ pub fn capture_snapshot(world: &GameWorld, events: Vec<GameEvent>) -> TickSnapsh
                 heading: b.heading,
             })
             .collect(),
+
         events,
     }
 }
@@ -287,6 +311,7 @@ pub fn check_win(world: &mut GameWorld) {
         };
     } else if world.tick >= world.max_ticks {
         let mut team_energy: std::collections::HashMap<u8, f64> = std::collections::HashMap::new();
+
         for robot in world.robots.iter().filter(|r| r.alive) {
             *team_energy.entry(robot.team).or_insert(0.0) += robot.energy;
         }
@@ -310,18 +335,13 @@ pub fn check_win(world: &mut GameWorld) {
     }
 }
 
-/// Run a complete tick. The caller is responsible for calling WASM functions
-/// (on_hit, on_collision, on_tick) and collecting actions.
-/// This function handles resolution, physics, capture, and win check.
 pub fn run_tick(world: &mut GameWorld, all_actions: &[PlayerActions]) -> TickSnapshot {
     world.tick += 1;
 
     let game_events = run_resolution_phase(world, all_actions);
-
     run_physics_phase(world);
 
     let snapshot = capture_snapshot(world, game_events);
-
     check_win(world);
 
     snapshot
@@ -352,6 +372,7 @@ mod tests {
     fn test_robot_moves_forward() {
         let mut world = test_world_2v2();
         let initial_x = world.robots[0].x;
+
         let actions = vec![
             PlayerActions {
                 actions: vec![RobotAction::SetSpeed(5.0)],
@@ -360,13 +381,13 @@ mod tests {
         ];
 
         run_tick(&mut world, &actions);
-
         assert!(world.robots[0].x > initial_x);
     }
 
     #[test]
     fn test_robot_rotates() {
         let mut world = test_world_2v2();
+
         let actions = vec![
             PlayerActions {
                 actions: vec![RobotAction::Rotate(5.0)],
@@ -398,6 +419,7 @@ mod tests {
     #[test]
     fn test_speed_clamped() {
         let mut world = test_world_2v2();
+
         let actions = vec![
             PlayerActions {
                 actions: vec![RobotAction::SetSpeed(100.0)],
@@ -412,6 +434,7 @@ mod tests {
     #[test]
     fn test_rotation_clamped() {
         let mut world = test_world_2v2();
+
         let actions = vec![
             PlayerActions {
                 actions: vec![RobotAction::Rotate(50.0)],
@@ -426,6 +449,7 @@ mod tests {
     #[test]
     fn test_only_first_action_of_each_type_applied() {
         let mut world = test_world_2v2();
+
         let actions = vec![
             PlayerActions {
                 actions: vec![RobotAction::SetSpeed(3.0), RobotAction::SetSpeed(7.0)],
@@ -490,6 +514,7 @@ mod tests {
             ],
             1,
         );
+
         world.robots[0].energy = 10.0;
         world.robots[1].energy = 55.0;
         world.robots[2].energy = 30.0;
@@ -499,6 +524,7 @@ mod tests {
             PlayerActions::default(),
             PlayerActions::default(),
         ];
+
         run_tick(&mut world, &actions);
 
         assert_eq!(
@@ -526,12 +552,12 @@ mod tests {
             ],
             1,
         );
+
         world.robots[0].energy = 42.0;
         world.robots[1].energy = 42.0;
 
         let actions = vec![PlayerActions::default(), PlayerActions::default()];
         run_tick(&mut world, &actions);
-
         assert_eq!(world.status, GameStatus::Finished { winner_team: None });
     }
 

@@ -1,18 +1,22 @@
 use crate::world::*;
 
 pub fn normalize_angle(angle: f64) -> f64 {
-    let mut a = angle;
-    while a > 180.0 {
-        a -= 360.0;
+    let mut angle = angle;
+
+    while angle > 180.0 {
+        angle -= 360.0;
     }
-    while a < -180.0 {
-        a += 360.0;
+
+    while angle < -180.0 {
+        angle += 360.0;
     }
-    a
+
+    angle
 }
 
 pub fn compute_scan(world: &GameWorld, robot_id: usize) -> f64 {
     let robot = &world.robots[robot_id];
+
     if !robot.alive {
         return -1.0;
     }
@@ -24,6 +28,7 @@ pub fn compute_scan(world: &GameWorld, robot_id: usize) -> f64 {
         if other.team == robot.team || !other.alive {
             continue;
         }
+
         let dx = other.x - robot.x;
         let dy = -(other.y - robot.y);
         let angle_to = dy.atan2(dx);
@@ -31,6 +36,7 @@ pub fn compute_scan(world: &GameWorld, robot_id: usize) -> f64 {
 
         if angle_diff.abs() <= SCAN_ARC_DEGREES {
             let dist = (dx * dx + dy * dy).sqrt();
+
             if dist < min_dist {
                 min_dist = dist;
             }

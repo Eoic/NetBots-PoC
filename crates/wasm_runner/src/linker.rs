@@ -1,7 +1,6 @@
 use engine::world::RobotAction;
 use wasmtime::{Caller, Engine, Linker};
 
-/// State passed to WASM host functions via Wasmtime's Caller.
 pub struct RobotState {
     pub robot_id: usize,
     pub actions: Vec<RobotAction>,

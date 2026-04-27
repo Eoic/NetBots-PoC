@@ -9,6 +9,7 @@ function maybeFlipDirection(chance: f64): void {
   if (util.chance(chance)) {
     sweepDir = -sweepDir;
   }
+
   if (util.chance(chance * 0.7)) {
     strafeDir = -strafeDir;
   }

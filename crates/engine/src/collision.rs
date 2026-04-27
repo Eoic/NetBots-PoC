@@ -30,11 +30,13 @@ fn distance(x1: f64, y1: f64, x2: f64, y2: f64) -> f64 {
 
 pub fn detect_bullet_robot_collisions(world: &GameWorld) -> Vec<BulletHit> {
     let mut hits = Vec::new();
+
     for (bi, bullet) in world.bullets.iter().enumerate() {
         for robot in &world.robots {
             if !robot.alive || robot.team == bullet.owner_team {
                 continue;
             }
+
             if distance(bullet.x, bullet.y, robot.x, robot.y) < ROBOT_RADIUS {
                 hits.push(BulletHit {
                     bullet_index: bi,
@@ -51,10 +53,12 @@ pub fn detect_bullet_robot_collisions(world: &GameWorld) -> Vec<BulletHit> {
 
 pub fn detect_robot_wall_collisions(world: &GameWorld) -> Vec<WallCollision> {
     let mut collisions = Vec::new();
+
     for robot in &world.robots {
         if !robot.alive {
             continue;
         }
+
         if robot.x <= ROBOT_RADIUS
             || robot.x >= world.arena_width - ROBOT_RADIUS
             || robot.y <= ROBOT_RADIUS
@@ -67,21 +71,26 @@ pub fn detect_robot_wall_collisions(world: &GameWorld) -> Vec<WallCollision> {
             });
         }
     }
+
     collisions
 }
 
 pub fn detect_robot_robot_collisions(world: &GameWorld) -> Vec<RobotCollision> {
     let mut collisions = Vec::new();
+
     for i in 0..world.robots.len() {
         for j in (i + 1)..world.robots.len() {
             let a = &world.robots[i];
             let b = &world.robots[j];
+
             if !a.alive || !b.alive {
                 continue;
             }
+
             if distance(a.x, a.y, b.x, b.y) < ROBOT_RADIUS * 2.0 {
                 let mid_x = (a.x + b.x) / 2.0;
                 let mid_y = (a.y + b.y) / 2.0;
+
                 collisions.push(RobotCollision {
                     robot_a: a.id,
                     robot_b: b.id,
@@ -91,6 +100,7 @@ pub fn detect_robot_robot_collisions(world: &GameWorld) -> Vec<RobotCollision> {
             }
         }
     }
+
     collisions
 }
 
@@ -102,6 +112,7 @@ mod tests {
     #[test]
     fn test_bullet_hits_robot() {
         let mut world = test_world_2v2();
+
         world.bullets.push(Bullet {
             owner_id: 0,
             owner_team: 0,
@@ -111,6 +122,7 @@ mod tests {
             speed: BULLET_SPEED,
             power: 1.0,
         });
+
         let hits = detect_bullet_robot_collisions(&world);
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].robot_id, 1);
@@ -120,6 +132,7 @@ mod tests {
     #[test]
     fn test_bullet_doesnt_hit_teammate() {
         let mut world = test_world_2v2();
+
         world.bullets.push(Bullet {
             owner_id: 0,
             owner_team: 0,
@@ -129,6 +142,7 @@ mod tests {
             speed: BULLET_SPEED,
             power: 1.0,
         });
+
         let hits = detect_bullet_robot_collisions(&world);
         assert_eq!(hits.len(), 0);
     }
@@ -146,11 +160,12 @@ mod tests {
     fn test_wall_collision_on_exact_arena_border() {
         let mut world = test_world_2v2();
         world.robots[0].x = ROBOT_RADIUS;
+
         let collisions = detect_robot_wall_collisions(&world);
         assert_eq!(collisions.len(), 1);
         assert_eq!(collisions[0].robot_id, 0);
-
         world.robots[0].x = world.arena_width - ROBOT_RADIUS;
+
         let collisions = detect_robot_wall_collisions(&world);
         assert_eq!(collisions.len(), 1);
         assert_eq!(collisions[0].robot_id, 0);
@@ -163,6 +178,7 @@ mod tests {
         world.robots[0].y = 300.0;
         world.robots[1].x = 420.0;
         world.robots[1].y = 300.0;
+
         let collisions = detect_robot_robot_collisions(&world);
         assert_eq!(collisions.len(), 1);
     }

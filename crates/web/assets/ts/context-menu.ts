@@ -4,51 +4,54 @@ export interface ContextMenuItem {
 }
 
 export class ContextMenu {
-    private el: HTMLDivElement;
+    private element: HTMLDivElement;
 
     constructor() {
-        this.el = document.createElement("div");
-        this.el.className = "context-menu";
-        this.el.style.display = "none";
-        document.body.appendChild(this.el);
-
+        this.element = document.createElement("div");
+        this.element.className = "context-menu";
+        this.element.style.display = "none";
+        document.body.appendChild(this.element);
         document.addEventListener("click", () => this.hide());
         document.addEventListener("contextmenu", () => this.hide());
 
-        document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape") this.hide();
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") this.hide();
         });
     }
 
     show(x: number, y: number, items: ContextMenuItem[]): void {
-        this.el.textContent = '';
+        this.element.textContent = '';
 
         for (const item of items) {
             const row = document.createElement("div");
             row.className = "context-menu-item";
             row.textContent = item.label;
+
             row.addEventListener("click", (e) => {
                 e.stopPropagation();
                 this.hide();
                 item.action();
             });
-            this.el.appendChild(row);
+
+            this.element.appendChild(row);
         }
 
-        this.el.style.left = `${x}px`;
-        this.el.style.top = `${y}px`;
-        this.el.style.display = "block";
+        this.element.style.left = `${x}px`;
+        this.element.style.top = `${y}px`;
+        this.element.style.display = "block";
 
-        const rect = this.el.getBoundingClientRect();
+        const rect = this.element.getBoundingClientRect();
+
         if (rect.right > window.innerWidth) {
-            this.el.style.left = `${window.innerWidth - rect.width - 4}px`;
+            this.element.style.left = `${window.innerWidth - rect.width - 4}px`;
         }
+
         if (rect.bottom > window.innerHeight) {
-            this.el.style.top = `${window.innerHeight - rect.height - 4}px`;
+            this.element.style.top = `${window.innerHeight - rect.height - 4}px`;
         }
     }
 
     hide(): void {
-        this.el.style.display = "none";
+        this.element.style.display = "none";
     }
 }

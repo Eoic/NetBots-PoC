@@ -28,12 +28,8 @@ pub struct ValidatedRequest {
 pub fn validate_run_request(
     req: &RunRequest,
 ) -> Result<ValidatedRequest, (StatusCode, Json<RunResponse>)> {
-    // Validate files map
     if req.files.is_empty() {
-        return Err(error_response(
-            StatusCode::BAD_REQUEST,
-            "No files provided",
-        ));
+        return Err(error_response(StatusCode::BAD_REQUEST, "No files provided"));
     }
 
     if req.files.len() > MAX_FILES {
@@ -52,11 +48,7 @@ pub fn validate_run_request(
         if content.len() > MAX_FILE_SIZE {
             return Err(error_response(
                 StatusCode::BAD_REQUEST,
-                &format!(
-                    "File '{}' exceeds {} KB limit",
-                    path,
-                    MAX_FILE_SIZE / 1024
-                ),
+                &format!("File '{}' exceeds {} KB limit", path, MAX_FILE_SIZE / 1024),
             ));
         }
 
@@ -66,14 +58,10 @@ pub fn validate_run_request(
     if total_size > MAX_TOTAL_SIZE {
         return Err(error_response(
             StatusCode::BAD_REQUEST,
-            &format!(
-                "Total file size exceeds {} KB limit",
-                MAX_TOTAL_SIZE / 1024
-            ),
+            &format!("Total file size exceeds {} KB limit", MAX_TOTAL_SIZE / 1024),
         ));
     }
 
-    // Validate robots
     if req.robots.is_empty() {
         return Err(error_response(
             StatusCode::BAD_REQUEST,
@@ -115,7 +103,6 @@ pub fn validate_run_request(
         }
     }
 
-    // Validate ticks
     let max_ticks = req.max_ticks.unwrap_or(engine::world::MAX_TICKS);
 
     if max_ticks == 0 {

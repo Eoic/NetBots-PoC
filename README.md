@@ -2,6 +2,8 @@
 
 A proof of concept robot battle simulator.
 
+![NetBots](./public/demo.png)
+
 ## Requirements
 
 - Rust
